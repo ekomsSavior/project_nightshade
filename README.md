@@ -52,7 +52,7 @@ ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
 
 ```bash
 # Start the Nightshade C2 server
-python3 nightshade_c2_server.py
+python3 nightshade_staging.py
 
 # Server will start on http://127.0.0.1:8080
 # Reverse shell handler starts on port 4444

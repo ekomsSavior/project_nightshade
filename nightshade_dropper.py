@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Project Nightshade - Advanced Excel Dropper with Enhanced C2 Integration
+Project Nightshade - Advanced Document Dropper with Enhanced C2 Integration
 Author: ek0ms savi0r | OPSEC Grade: Midnight
 Description:
-    Creates an Excel file with OLE template injection that deploys multiple payload options:
+    Creates Excel and .pdf files with OLE template injection that deploys multiple payload options:
     - Reverse Shell (Connects to Nightshade C2)
     - RCE + Persistence (Uses Nightshade C2 endpoints)
     - Full C2 Agent (Advanced C2 with Nightshade protocol)

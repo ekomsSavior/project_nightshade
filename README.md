@@ -1,11 +1,11 @@
-#  Project Nightshade - Advanced Excel Dropper & C2 System
+#  Project Nightshade - Advanced Document Dropper & C2 System
 
 **Author:** ek0ms savi0r | **OPSEC Grade:** Midnight  
 **A sophisticated penetration testing framework for authorized security research only.**
 
 ##  Overview
 
-Project Nightshade is an advanced Excel dropper system with integrated Command & Control (C2) capabilities. It creates weaponized Excel files that deploy in-memory, fileless payloads with multiple persistence mechanisms and encrypted communications.
+Project Nightshade is an advanced Document dropper system with integrated Command & Control (C2) capabilities. It creates weaponized Excel and PDF files that deploy in-memory, fileless payloads with multiple persistence mechanisms and encrypted communications.
 
 ##  Features
 

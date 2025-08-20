@@ -231,6 +231,4 @@ Always operate within legal boundaries and with proper authorization. This tool 
 
 **ek0ms savi0r**
 
----
 
-This README provides everything you need to get started, love! It includes installation instructions, usage guide, OPSEC considerations, and ethical guidelines. Perfect for your GitHub repository! 🚀💕

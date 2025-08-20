@@ -58,10 +58,11 @@ python3 nightshade_staging.py
 # Reverse shell handler starts on port 4444
 ```
 
-### Step 2: Generate the Dropper
+### Step 2: OPEN SECOND TERMINAL & Generate the Dropper
 
 ```bash
 # Run the interactive dropper generator
+cd project_nightshade
 python3 nightshade_dropper.py
 ```
 

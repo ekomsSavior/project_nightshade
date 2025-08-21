@@ -101,19 +101,18 @@ ngrok http 8080
 ### Configuration Examples:
 
 **Direct Connection (No Ngrok):**
-```
+
 C2 Server: http://192.168.1.100:8080
 Reverse Shell: 192.168.1.100:4444
-```
+
 
 **Ngrok Tunneling (Recommended for OPSEC):**
-```
+
 C2 Server: https://abc123-def4-567.ngrok-free.app
 Reverse Shell: abc123-def4-567.ngrok-free.app:4444
-```
+
 
 **Important**: When using ngrok, you don't need to specify ports for HTTP/HTTPS traffic, but you DO need to specify the port for reverse shell connections (ngrok exposes TCP ports differently).
-```
 
 
 **Delivery Method:**

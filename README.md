@@ -1,6 +1,6 @@
 # Project Nightshade - Advanced Document Dropper & C2 System
 
-**Author:** ek0ms savi0r | **OPSEC Grade:** Midnight  
+**Author:** ek0ms savi0r  
 **A sophisticated penetration testing framework for authorized security research only.**
 
 ## Overview

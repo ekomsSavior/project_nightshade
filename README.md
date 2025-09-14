@@ -337,7 +337,7 @@ Enable verbose logging by checking the C2 server console for detailed connection
 
 **This tool is intended for:**
 - Penetration testing with explicit permission
-- Security research in controlled environments
+- Security research in controlled, owned and legal environments
 - Educational purposes in ethical hacking courses
 
 **the dev of this tool assumes no liability and is not responsible for any misuse or damage caused by this program.**

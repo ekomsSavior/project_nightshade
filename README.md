@@ -336,7 +336,7 @@ Enable verbose logging by checking the C2 server console for detailed connection
 
 **the dev of this tool assumes no liability and is not responsible for any misuse or damage caused by this program.**
 
-## Companion, **lab cleaner**:
+## Companion clean up script, **lab_cleaner**:
 
 Lab Cleaner is a defensive utility for Linux that helps you remove persistence and processes left behind when testing your own malware, droppers, or payloads on a lab system.
 

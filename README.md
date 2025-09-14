@@ -3,6 +3,8 @@
 **By:** ek0ms savi0r  
 **A sophisticated penetration testing framework for authorized security research only.**
 
+![unnamed](https://github.com/user-attachments/assets/9c5bd0d8-b34a-43c4-8604-d2bf9423bd55)
+
 ## Overview
 
 Project Nightshade is an advanced Document dropper system with integrated Command & Control (C2) capabilities. It creates weaponized Excel and PDF files that deploy in-memory, fileless payloads with multiple persistence mechanisms and encrypted communications.
@@ -51,6 +53,8 @@ ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
 
 ##  Quick Start Guide
 
+![image0(4)](https://github.com/user-attachments/assets/c78643f2-a867-45b4-b799-15580d8447ef)
+
 ### Option A: Reverse Shell T(Easiest Setup)
 
 1. **Start C2 Server:**
@@ -96,6 +100,8 @@ ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
 4. **The tool AUTOMATICALLY detects your ngrok URL and configures the payload!**
 
 ## Detailed Usage
+
+![image2](https://github.com/user-attachments/assets/5098827f-af8f-477f-94a1-6459130ac8df)
 
 ### C2 Server Configuration
 

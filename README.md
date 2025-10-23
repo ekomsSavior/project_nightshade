@@ -9,6 +9,8 @@
 
 Project Nightshade is an advanced Document dropper system with integrated Command & Control (C2) capabilities. It creates weaponized Excel and PDF files that deploy in-memory, fileless payloads with multiple persistence mechanisms and encrypted communications.
 
+**❤ FOR AUTHORIZED TESTING ONLY ❤**
+
 ## Features
 
 - **Multiple Document Types**: Excel (.xlsx) and PDF (.pdf) document support

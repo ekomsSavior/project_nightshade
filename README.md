@@ -1,5 +1,7 @@
 # Project Nightshade - Advanced Document Dropper & C2 
 
+## Project Nightshade has 2 evolutions: the current branch youre in is the first and the most updated version is in the other branch of this repo called NITGHTSHADE_C4
+
 **By:** ek0ms savi0r  
 **A sophisticated penetration testing framework for authorized security research only.**
 

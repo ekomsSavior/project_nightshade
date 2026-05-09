@@ -1,355 +1,348 @@
-# Project Nightshade - Advanced Document Dropper & C2 
+# Nightshade C4
+(Project_Nightshade upgrade xox)
 
-**By:** ek0ms savi0r  
-**A sophisticated penetration testing framework for authorized security research only.**
+Document Dropper and C2 Framework.
 
-![unnamed](https://github.com/user-attachments/assets/9c5bd0d8-b34a-43c4-8604-d2bf9423bd55)
+---
 
 ## Overview
 
-Project Nightshade is an advanced Document dropper system with integrated Command & Control (C2) capabilities. It creates weaponized Excel and PDF files that deploy in-memory, fileless payloads with multiple persistence mechanisms and encrypted communications.
+Nightshade C4 generates weaponized documents (Excel, PDF, HTA, LNK) that deploy multi-stage, in-memory payloads with encrypted C2 communication, sandbox evasion, AMSI bypass, ETW patching, and anti-forensic countermeasures.
 
-**❤ FOR AUTHORIZED TESTING ONLY ❤**
+The framework consists of two components: a document generator and a C2 server. Documents are distributed to target systems; the C2 server manages implant sessions, queues commands, and collects results.
+
+
+## DISCLAIMER
+
+For authorized security testing and Educational Purposes only.
+
+---
 
 ## Features
 
-- **Multiple Document Types**: Excel (.xlsx) and PDF (.pdf) document support
-- **Multiple Payload Options**: Reverse Shell, RCE, Full C2 Agent
-- **Automatic Ngrok Integration**: Full TCP tunnel support for reverse shells
-- **OPSEC-Focused**: Domain rotation, ngrok tunneling, anti-analysis checks
-- **Encrypted Communications**: AES-256 encrypted C2 channels
-- **Persistence**: Multiple persistence mechanisms (scheduled tasks, registry, WMI)
-- **Stealth**: Fileless execution, memory-only payloads
-- **Flexible Delivery**: Ngrok, domain rotation, or custom domains
-- **Adaptive Payloads**: Different techniques for Excel vs PDF exploitation
+### Payload Capabilities
+
+- **Three-tier payload system**: Reverse shell (raw TCP), RCE beacon (HTTP C2), full implant (HTTP C2 + WMI persistence)
+- **Multi-stage staging**: Stage 0 (sleep + DNS beacon, zero malicious static signature), Stage 1 (evasion preamble + decompress Stage 2), Stage 2 (implant execution)
+- **Evasion chain**: AMSI bypass (4 polymorphic variants), ETW patching, multi-factor sandbox detection (VM model, analysis tools, disk count, disk size, RAM, CPU cores, username, boot time, process count)
+- **Beacon jitter**: Variable 45-120s check-in intervals
+- **Payload obfuscation**: Polymorphic PowerShell with random casing, backtick insertion, char encoding, GZip compression, junk comment injection
+
+### Document Types
+
+| Type | Technique | Trigger | Persistence Required |
+|------|-----------|---------|---------------------|
+| Excel (.xlsx) | OLE Template Injection | User clicks "Enable Content" | No |
+| PDF (.pdf) | OpenAction JavaScript | Document opens | No |
+| HTA (.hta) | VBScript/JS execution | Document opens | No |
+| LNK (.lnk) | Shortcut + obfuscated PowerShell | User double-clicks | No |
+
+### C2 Infrastructure
+
+- HTTP staging server with TLS support
+- DNS-based C2 channel (protocol-encoded commands in subdomain queries)
+- Ngrok tunnel management (TCP and HTTP)
+- Time-based domain rotation (hourly cycling through realistic domains)
+- Custom domain support
+
+### Anti-Forensics
+
+- Mark-of-the-Web (Zone.Identifier) automatic stripping
+- File timestamp randomization (timestomping)
+- Self-delete on completion
+- Event log wiping (application, security, system, PowerShell operational)
+
+### Security
+
+- AES-256-GCM authenticated encryption with HKDF-SHA256 key derivation
+- Self-signed TLS certificate generation for HTTPS C2
+- Database-logged request history and command audit trail
+- Per-campaign encryption keys (auto-generated)
+
+---
 
 ## Installation
 
-### 1. Clone the Repository
+### Requirements
+
+- Python 3.9+
+- Pip dependencies (see requirements.txt)
+
+### Setup
 
 ```bash
-git clone https://github.com/ekomsSavior/project_nightshade.git
-cd project_nightshade
+git clone https://github.com/ekomsSavior/nightshadeRANGER.git
+cd nightshadeRANGER
+pip install -r requirements.txt
 ```
 
-### 2. Install Dependencies
+For TLS support, the cryptography library is required (included in requirements.txt).
+
+### Ngrok (Optional)
+
+For tunnel-based delivery:
 
 ```bash
-sudo apt update
-pip3 install pycryptodome requests flask --break-system-packages
-```
-
-### 3. Install ngrok (for tunneling)
-
-```bash 
 wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
 tar -xzf ngrok-v3-stable-linux-amd64.tgz
 sudo mv ngrok /usr/local/bin/
-```
-
-### 4. Authenticate Ngrok
-
-```bash
 ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
 ```
 
-##  Quick Start Guide
+---
 
-![image0(4)](https://github.com/user-attachments/assets/c78643f2-a867-45b4-b799-15580d8447ef)
+## Usage
 
-### Option A: Reverse Shell T(Easiest Setup)
-
-1. **Start C2 Server:**
-   ```bash
-   python3 nightshade_staging.py
-   # Server starts on port 8080, reverse shell handler on port 4444
-   ```
-
-2. **Generate Dropper in seperate terminal:**
-   ```bash
-   python3 nightshade_dropper.py
-   ```
-   - Choose payload: `1` (Reverse Shell)
-   - Use default IP/port or enter your public IP
-   - Choose delivery: `1` (Ngrok tunneling)
-
-3. **The tool AUTOMATICALLY:**
-   - Starts ngrok TCP tunnel for port 4444
-   - Configures payload with correct ngrok address
-   - Generates your malicious document
-
-4. **Deliver the document and wait for connections!**
-
-### Option B: RCE/Full C2 (HTTP-Based)
-
-1. **Start C2 Server:**
-   ```bash
-   python3 nightshade_staging.py
-   ```
-
-2. **Start Ngrok HTTP Tunnel:**
-   ```bash
-   ngrok http 8080
-   ```
-
-3. **Generate Dropper:**
-   ```bash
-   python3 nightshade_dropper.py
-   ```
-   - Choose payload: `2` (RCE) or `3` (Full C2)
-   - Choose delivery: `1` (Ngrok tunneling)
-
-4. **The tool AUTOMATICALLY detects your ngrok URL and configures the payload!**
-
-## Detailed Usage
-
-![image2](https://github.com/user-attachments/assets/5098827f-af8f-477f-94a1-6459130ac8df)
-
-### C2 Server Configuration
-
-The staging server runs on two ports:
-- **HTTP Server**: Port 8080 (for templates and C2 communications)
-- **Reverse Shell Handler**: Port 4444 (for direct shell connections)
-
-### Payload Types Explained
-
-#### 1. Reverse Shell (Payload Option 1)
-- **Direct Connection**: Connects directly to your IP:4444
-- **Ngrok Tunnel**: **AUTOMATIC** - Tool creates TCP tunnel and configures payload
-- **Best for**: Immediate interactive access
-
-#### 2. RCE + Persistence (Payload Option 2)  
-- **HTTP-Based**: Communicates via HTTP requests to C2 server
-- **Ngrok Compatible**: Works with HTTP tunnels (ngrok http 8080)
-- **Best for**: Stealthy command execution
-
-#### 3. Full C2 Agent (Payload Option 3)
-- **Advanced Features**: Encrypted comms, persistence, anti-analysis
-- **HTTP-Based**: Uses C2 HTTP endpoints
-- **Ngrok Compatible**: Works with HTTP tunnels
-- **Best for**: Long-term operations
-
-### Ngrok Configuration Made Simple
-
-#### For Reverse Shell (Payload 1):
-```bash
-# The tool handles this AUTOMATICALLY!
-# It will:
-# 1. Start ngrok tcp 4444
-# 2. Extract the public address (e.g., 1.tcp.ngrok.io:12345)
-# 3. Configure the payload with this address
-```
-
-#### For RCE/Full C2 (Payloads 2 & 3):
-```bash
-# Manual option (or let the tool detect it)
-ngrok http 8080
-
-# The tool will automatically detect your ngrok URL
-# and use it in the payload configuration
-```
-
-### Configuration Examples
-
-#### Reverse Shell with Ngrok:
-```
-Payload Type: 1 (Reverse Shell)
-Delivery Method: 1 (Ngrok tunneling)
-```
-
-### RCE with Ngrok :
-```
-Payload Type: 2 (RCE + Persistence)  
-Delivery Method: 1 (Ngrok tunneling)
-# Tool automatically detects your HTTP ngrok URL
-```
-
-#### RCE with Custom Domain:
-```
-Payload Type: 2 (RCE + Persistence)  
-Delivery Method: 3 (Custom domain)
-Custom Domain: your-c2-domain.com
-```
-
-### Custom Domain vs. Ngrok Domain
-
-**Ngrok Domain (Automatic, Temporary):**
-- `https://abc123-def4-567.ngrok-free.app` (HTTP tunnel)
-- `1.tcp.ngrok.io:12345` (TCP tunnel)  
-- **Provided by ngrok**, random, changes every time
-- **Use Delivery Method: 1 (Ngrok tunneling)**
-
-**Custom Domain (Your Own, Permanent):**
-- `https://assets.microsoft-update.com` (your owned domain)
-- `c2.yourcompany.com` (your subdomain)
-- **You own this domain**, it doesn't change
-- **Use Delivery Method: 3 (Custom domain)**
-
-### When to Use Each:
-
-**Use Ngrok (Option 1) when:**
-- Quick testing
-- No budget for domains
-- Temporary operations
-- Don't care about reputation
-
-**Use Custom Domain (Option 3) when:**
-- Long-term operations  
-- OPSEC matters (using legit-looking domains)
-- You own trustworthy domains
-- Budget for domain registration
-
-### Example of Custom Domain Setup:
-
-1. **Buy a domain:** `microsoft-update.com` (looks legit)
-2. **Set up DNS:** Point to your server IP or ngrok
-3. **In Nightshade:**
-   ```
-   Payload Type: 2 (RCE)
-   Delivery Method: 3 (Custom domain)  
-   Custom Domain: microsoft-update.com
-   ```
-
-The payload will then use `https://microsoft-update.com/template.ole` instead of ngrok URLs.
-
-The payload numbering is:
-```
-    1 = Reverse Shell (raw TCP)
-
-    2 = RCE + Persistence (HTTP C2)
-
-    3 = Full C2 Agent (advanced HTTP C2)
-```
-    
-## Document Types & Capabilities
-
-### Excel Documents (.xlsx)
-- **Technique**: OLE Template Injection
-- **Trigger**: Document opening + "Enable Content"
-- **Detection**: Microsoft Excel User-Agent
-- **Persistence**: Excel-specific startup scripts
-- **Advantages**: Higher success rate in corporate environments
-
-### PDF Documents (.pdf)
-- **Technique**: JavaScript payload execution
-- **Trigger**: Document opening (auto-executes)
-- **Detection**: Adobe Reader User-Agent
-- **Persistence**: Reader-specific update mechanisms
-- **Advantages**: No "Enable Content" prompt needed
-
-## C2 Operations
-
-### Monitoring Connections
-
-#### For Reverse Shell:
-```bash
-# Connections appear automatically in the C2 server console
-[+] Reverse shell connection from 192.168.1.100:51542
-```
-
-#### For RCE/Full C2:
-```bash
-# Check active sessions
-curl http://localhost:8080/c2/sessions
-
-# View server statistics
-curl http://localhost:8080/admin/stats
-```
-
-### Example C2 Commands
+### Interactive Document Generation
 
 ```bash
-# System reconnaissance
-whoami
-systeminfo
-ipconfig /all
-
-# Lateral movement  
-net view
-net user /domain
-
-# Data collection
-dir C:\Users\ /s | findstr "password|secret|key"
+python3 nightshade.py generate
 ```
 
-## OPSEC Considerations
+Walks through a wizard to configure:
+- Encryption key (auto-generated or custom)
+- Payload tier (1-3)
+- C2 address and port
+- Document type (xlsx, pdf, hta, lnk)
+- Delivery method (ngrok, domain rotation, custom domain)
+- Multi-stage payload toggle
+- Anti-forensics options (self-delete, timestomping, MotW stripping, log wiping)
 
-### Infrastructure OPSEC
+### Headless Generation
 
-**Ngrok Best Practices:**
+```bash
+python3 nightshade.py generate --headless --config config.yaml
 ```
-# Region selection for better performance
-ngrok http 8080 --region eu
 
-# Custom subdomains (plus plan required)
-ngrok http 8080 --subdomain your-custom-name
+Environment variables can also be used:
 
-# Available regions: us, eu, au, ap, sa, jp, in
+```bash
+NIGHTSHADE_KEY="your-key" \
+NIGHTSHADE_C2_URL="http://your-server:8080" \
+NIGHTSHADE_TIER="2" \
+NIGHTSHADE_DOC="xlsx" \
+NIGHTSHADE_OUTPUT="Q3_Financials.xlsx" \
+python3 nightshade.py generate --headless
 ```
 
-**Domain Rotation:**
-- Built-in domain rotation for template delivery
-- Uses legitimate-looking Microsoft/Adobe domains
-- Automatically cycles for operational security
+### Starting the C2 Server
 
-### Anti-Analysis Features
+```bash
+# HTTP (default port 8080)
+python3 nightshade.py serve
 
-- Sandbox detection (VM, sandbox, debugger checks)
-- Application-specific evasion techniques
-- Dynamic payload generation based on client type
-- Fileless, in-memory execution
+# HTTPS with TLS
+python3 nightshade.py serve --tls --port 443
 
-## Troubleshooting
+# Custom port
+python3 nightshade.py serve --port 8080 --host 0.0.0.0
 
-### Common Issues & Solutions
+# With a specific encryption key
+python3 nightshade.py serve --key "your-encryption-key"
+```
 
-** Reverse shell not connecting:**
-- Ensure you're using the latest version with ngrok TCP support
-- The tool now handles this automatically - no manual configuration needed
+When the server starts, it listens for:
+- Template requests from documents (GET /template.ole)
+- Implant check-ins (POST /c2/checkin)
+- Command results (POST /c2/result)
+- Administrative commands (POST /c2/command)
 
-** Ngrok tunnel not detected:**
-- Make sure ngrok is authenticated: `ngrok config add-authtoken YOUR_TOKEN`
-- Check if ngrok is running: `pgrep ngrok`
+The server console provides interactive commands:
+- `sessions` - List active implant sessions
+- `cmd <session_id> <command>` - Queue a command for a specific session
+- `interact <session_id>` - Open an interactive shell with a session
+- `history` - View command history
+- `export` - Export task results as CSV
+- `stats` - Show server statistics
+- `help` - Show available commands
+- `quit` - Stop the server
 
-** "Enable Content" not clicked:**
-- Use PDF format for auto-execution
-- Social engineering: make document look legitimate
+### DNS C2 Listener
 
-** Quick Fix Checklist:**
-1. Update to latest version
-2. Use payload option 1 for easiest setup
-3. Let the tool handle ngrok automatically
-4. Start with Excel documents (higher success rate)
+```bash
+python3 nightshade.py dns --domain c2.example.com --port 53
+```
 
-### Debug Mode
+The DNS C2 handler encodes commands as subdomain queries. Implants resolve A/AAAA records for check-ins and receive commands via TXT record responses. This requires a nameserver that the target can resolve queries against.
 
-Enable verbose logging by checking the C2 server console for detailed connection information and errors.
+DNS C2 console commands:
+- `sessions` - List active DNS sessions
+- `cmd <session_id> <command>` - Queue a command for a session
+- `results <session_id>` - View session results
+- `quit` - Stop the listener
 
-## Pro Tips
+### Configuration File
 
-1. **Start Simple**: Use Reverse Shell (option 1) for easiest setup
-2. **Let the Tool Work**: Don't manually start ngrok - the tool handles it
-3. **Test Locally First**: Try with direct IP before using ngrok
-4. **Use Both Formats**: Excel for corps, PDF for individual targets
-5. **Monitor Console**: Watch the C2 server for real-time connection info
+```bash
+# Create a default config
+python3 nightshade.py config --init
 
-## Legal & Ethical Notice
+# View current config
+python3 nightshade.py config --show
+```
 
-**FOR AUTHORIZED SECURITY RESEARCH ONLY**
+Example config.yaml:
 
-**This tool is intended for:**
-- Penetration testing with explicit permission
-- Security research in controlled, owned and legal environments
-- Educational purposes in ethical hacking courses
+```yaml
+c2_url: "http://127.0.0.1:8080"
+lhost: "127.0.0.1"
+lport: 4444
+tier: 2
+doc_type: "xlsx"
+output: "nightshade_output.xlsx"
+template_url: ""
+multi_stage: true
+dns_c2: false
+dns_domain: "dns-c2.local"
+key: ""
+```
 
-**the dev of this tool assumes no liability and is not responsible for any misuse or damage caused by this program.**
+### TLS Certificate Management
 
-## Companion clean up script, **lab_cleaner**:
+```bash
+# Generate a new certificate
+python3 nightshade.py cert --generate --common-name nightshade-c2.local --campaign default
 
-Lab Cleaner is a defensive utility for Linux that helps you remove persistence and processes left behind when testing your own malware, droppers, or payloads on a lab system.
+# List existing certificates
+python3 nightshade.py cert --list
 
-https://github.com/ekomsSavior/lab_cleaner
+# Custom key size and validity
+python3 nightshade.py cert --generate --key-size 4096 --validity 730
+```
+
+Certificates are stored in the `certs/` directory and auto-loaded when starting the server with `--tls`.
+
+---
+
+## Payload Architecture
+
+### Single-Stage
+
+The document contains a compressed, encrypted PowerShell payload. When the template loads, it decrypts and executes the payload directly.
+
+1. Document opens -> OLE template fetches from C2 server
+2. Server returns encrypted payload
+3. Document decrypts and executes via PowerShell
+
+### Multi-Stage (3 Stages)
+
+The document contains a minimal Stage 0 beacon. The payload is delivered in three stages to reduce document footprint and evade static analysis.
+
+1. **Stage 0**: Embedded in document. Sleeps 3-8 seconds, then resolves a DNS A/AAAA query or makes a simple HTTP GET request to check in. Contains no malicious logic visible to static analysis.
+2. **Stage 1**: Returned by the C2 server in response to the Stage 0 beacon. Contains AMSI bypass, ETW patch, sandbox detection, and the GZip-compressed Stage 2 payload.
+3. **Stage 2**: Decompressed and executed by Stage 1. The actual implant (reverse shell, RCE beacon, or full agent).
+
+### Tier 1: Reverse Shell
+
+Direct TCP connection back to the C2 server. Best for immediate interactive access.
+
+- Transport: Raw TCP
+- Persistence: Scheduled task
+- Shell: PowerShell interactive session
+
+### Tier 2: RCE Beacon
+
+HTTPS beacon that checks in for commands and posts results. Best for stealthy command execution.
+
+- Transport: HTTP C2
+- Persistence: Scheduled task + Registry (HKCU run key)
+- Protocol: Encrypted beacon with variable jitter
+
+### Tier 3: Full Agent
+
+Maximum capability implant with redundant persistence.
+
+- Transport: HTTP C2
+- Persistence: Scheduled task + Registry + WMI event subscription
+- Protocol: Encrypted beacon with modulus-based variable jitter
+
+---
+
+## Evasion Chain
+
+When a multi-stage payload executes, the following evasion sequence runs on the target system (not the operator's machine):
+
+1. **Sleep delay**: 3-8 seconds initial delay (evades sandbox timeouts)
+2. **AMSI bypass**: One of 4 polymorphic variants (registry patch, memory patch, amsiInitFailed flag, registry disable)
+3. **ETW bypass**: Patch .NET EventLogger.EventProviderEnabled
+4. **Sandbox detection**: Multi-factor check on VM model, analysis tools, disk count, disk size (<120GB), RAM (<2GB), CPU cores (<2), username patterns, boot time (<10 min)
+5. **If sandbox detected**: Payload silently exits with no indicators
+6. **Mark-of-Web removal**: Delete Zone.Identifier streams
+7. **Timestomping**: Randomize file timestamps
+8. **Payload execution**: Decompress and execute Stage 2
+9. **Self-delete**: Remove the document and temporary files (optional)
+10. **Beacon jitter**: Variable 45-120s between check-ins
+
+---
+
+## C2 API Reference
+
+| Endpoint | Method | Description |
+|---|---|---|
+| /template.ole | GET | Serve dropper template (validates User-Agent) |
+| /c2/checkin | POST | Implant beacon (encrypted) |
+| /c2/result | POST | Task result callback (encrypted) |
+| /c2/command | POST | Submit command to session |
+| /c2/sessions | GET | List active sessions |
+| /c2/tasks | GET | View task queue (optional ?session_id=) |
+| /c2/history | GET | Task history (supports ?format=csv) |
+| /admin/stats | GET | Server statistics |
+| /stage0/<session_id> | GET | Stage 1 payload delivery endpoint |
+
+### Session Management
+
+Sessions are tracked server-side with:
+- Unique session ID generated per campaign
+- IP address, hostname, and username of the implant
+- Check-in count and timestamp
+- Status (active/expired)
+
+Commands are queued per-session. Each implant receives one command per check-in. Results are associated with the originating session and stored in the SQLite database.
+
+---
+
+## OPSEC Notes
+
+- The staging server rejects requests without legitimate Office or PDF User-Agent headers
+- Encryption keys are per-campaign; each deployment should use a unique key
+- No hardcoded IPs or domains in the framework -- all addresses are configurable
+- Variable jitter prevents detection via fixed-interval beaconing patterns
+- DNS C2 queries use base32 encoding to avoid base64 fingerprinting
+- The C2 server validates session IDs on all check-in requests
+- TLS certificates are self-signed; for production, use a trusted CA or internal CA
+
+---
+
+## Architecture
+
+```
+                    +-----------------------+
+                    |   Nightshade C4 C2    |
+                    |   Server (Flask)      |
+                    |   :8080 (HTTP/TLS)    |
+                    +-----------+-----------+
+                                |
+          +---------------------+----------------------+
+          |                     |                      |
+          v                     v                      v
+   +-----------+         +-------------+         +-----------+
+   | Staging  |         | C2 Beacon  |         | Reverse   |
+   | :8080    |         | :8080/c2/* |         | Shell     |
+   | /template|         | endpoints  |         | :4444     |
+   +-----+----+         +------+------+         +-----+-----+
+         |                      |                      |
+         v                      v                      v
+    Documents               Implants              TCP Shells
+    (xlsx/pdf/              (HTTP)                (raw TCP)
+     hta/lnk)
+
+   +-------------------------------------------------------+
+   |          DNS C2 Handler (:53/udp)                     |
+   |          Subdomain-encoded check-in + commands        |
+   +-------------------------------------------------------+
+```
+
+---
 
 
-
-**ek0ms savi0r** 
+<img width="866" height="150" alt="image4" src="https://github.com/user-attachments/assets/cb946934-dd9f-4c3c-ba3f-2f9198ddf60e" />
